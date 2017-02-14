@@ -1,7 +1,8 @@
 % TODO HGM:
 % - Implement more clever file opening/closing
-% - What endian-ness does Ardupilot use? Implement something smart?
+% - Does endian-ness matter?
 % - Consider non-doubles for efficiency/speed/memory
+% - What's the difference between the "length" of a message as provided by FMT, vs the sum of the lengths of the field identifiers? (BQNnz, for example)
 % - Do we care about preserving the line number of the FMT message
 %    for a MessageFormat? (Right now, just neglect it.)
 
@@ -43,22 +44,23 @@ classdef Ardupilog % Does it inherit from anything?
 
             % Read messages one by one, either creating formats, moving to seen, or appending seen
             num_lines = input(['How many log lines to display? ']);
+            if isempty(num_lines)
+                disp('Processing entire log, could take a while...')
+                num_lines = 1e9;
+            end
             for ctr = 1:num_lines
                 if feof(obj.fileID) ~= 0
+                    disp(['End of File, ', num2str(obj.lastLineNum), ' lines total.'])
                     fclose(obj.fileID);
                     return
                 else
                     obj = obj.readLogLine();
+                    if mod(obj.lastLineNum,1e4)==0
+                        obj.lastLineNum
+                    end
                 end
             end
 
-            % num_bytes = input(['How many bytes to display? ']);
-            % % n=native, b=Big-end, l=Lit-end, s=Big-end-64-long, a = Lit-end-64-long
-            % data = fread(obj.fileID, [1, num_bytes], 'uint8', 0, 'l');
-            % disp('The data are:')
-            % %dec2hex(data,2)
-            % char(data)'
-            
             % Close the file
             fclose(obj.fileID);
         end
@@ -74,43 +76,46 @@ classdef Ardupilog % Does it inherit from anything?
             
             if (msgType == 128) % message is FMT
                 newType = fread(obj.fileID, 1, 'uint8', 0, 'l');
-                newLen = fread(obj.fileID, 1, 'uint8', 0, 'l'); % HGM: Will always be 89?
+                newLen = fread(obj.fileID, 1, 'uint8', 0, 'l');
+                newDataLen = newLen - 3; % The actual message length is 3 (header+ID bytes) + dataLen (bytes)
 
-                % Read 4 bytes, put into string, remove the last one if it's a space (dec=32, hex=20)
-                newName =  fread(obj.fileID, [1 4], 'uint8', 0, 'l');
-                % Remove all trailing spaces
-                while strcmp(newName(end), ' ')
+                % Read 4 bytes, put into string, remove the last one if it's empty
+                newName = fread(obj.fileID, [1 4], 'uint8', 0, 'l');
+                % Remove any trailing space (zero-chars)
+                while newName(end)==0
                     newName(end) = [];
                 end
                 
                 newFmt =  fread(obj.fileID, [1 16], 'uint8', 0, 'l');
-                % Remove all trailing spaces
-                while strcmp(newFmt(end), ' ')
+                while newFmt(end)==0
                     newFmt(end) = [];
                 end
 
                 newLabels =  fread(obj.fileID, [1 64], 'uint8', 0, 'l');
-                % Remove all trailing spaces
-                while strcmp(newLabels(end), ' ')
+                while newLabels(end)==0
                     newLabels(end) = [];
                 end
 
                 tbl_ndx = size(obj.logRecords,1)+1;
                 obj.logRecords{tbl_ndx,1} = newType;
-                obj.logRecords{tbl_ndx,2} = newName;
-                obj.logRecords{tbl_ndx,3} = newFmt;
-                obj.logRecords{tbl_ndx,4} = newLabels;
-                
-                msgData=char([newName,newFmt,newLabels]);
-            elseif any([obj.logRecords{:,1}]==msgType)
-                % Extract data according to table
-                msgData = '(being trashed)';
-            else
-                warning(['Unknown message type: number=', num2str(msgType)]);
-                msgData = '(being trashed)';
+                obj.logRecords{tbl_ndx,2} = newDataLen;
+                obj.logRecords{tbl_ndx,3} = char(newName);
+                obj.logRecords{tbl_ndx,4} = char(newFmt);
+                obj.logRecords{tbl_ndx,5} = char(newLabels);
+            else % message is not FMT
+                logRecords_ndx = find([obj.logRecords{:,1}]==msgType);
+                if isempty(logRecords_ndx) % if message type unknown
+                    warning(['Unknown message type: number=', num2str(msgType)]);
+                else
+                    % Extract data according to table
+                    msgData = fread(obj.fileID, [1 obj.logRecords{logRecords_ndx,2}], 'uint8', 0, 'l');
+                    % if (msgType ~= 129)
+                    %     obj.lastLineNum
+                    %     msgType
+                    %     char(msgData)
+                    % end
+                end
             end
-
-            disp(['Line ' num2str(obj.lastLineNum,'%08d') ': ' num2str(msgType) ',' num2str(msgData) '.'])
         end
         
         function obj = findMsgStart(obj)
