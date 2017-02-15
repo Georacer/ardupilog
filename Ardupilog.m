@@ -1,23 +1,24 @@
 % TODO HGM:
-% - Implement more clever file opening/closing
+% - Reconsider file opening/closing
 % - Does endian-ness matter?
 % - Consider non-doubles for efficiency/speed/memory
 % - What's the difference between the "length" of a message as provided by FMT, vs the sum of the lengths of the field identifiers? (BQNnz, for example)
 % - Do we care about preserving the line number of the FMT message
 %    for a MessageFormat? (Right now, just neglect it.)
 
-classdef Ardupilog % Does it inherit from anything?
+classdef Ardupilog < dynamicprops
     properties
         % platform
         % version
         % bootTime
         % logTypesNoData = MessageFormat();% An array of message formats without data (yet), instantiated with just the FMT type % 
-        % logRecords = MessageFormat('FMT', 'BBnNZ', {'Type','Length','Name','Format','Columns'});% An array of all known message formats with data, instantiated with just the FMT type
-        logRecords = cell(0,3);
+        logRecords = [];
+        logRec_tbl = cell(0,3);
         fileName % name of .bin file
         filePathName % path to .bin file
-        fileID
+        fileID = -1;
         lastLineNum = 0;
+        logRecordsProperties; % Will be array of meta.DynamicProperty items... can't figure out how to do this yet
     end
     methods
         function obj = Ardupilog(pathAndFileName)
@@ -51,8 +52,9 @@ classdef Ardupilog % Does it inherit from anything?
             for ctr = 1:num_lines
                 if feof(obj.fileID) ~= 0
                     disp(['End of File, ', num2str(obj.lastLineNum), ' lines total.'])
-                    fclose(obj.fileID);
-                    return
+                    % fclose(obj.fileID);
+                    % return
+                    break %TODO: verify this "break" inside if-else works correctly
                 else
                     obj = obj.readLogLine();
                     if mod(obj.lastLineNum,1e4)==0
@@ -77,38 +79,32 @@ classdef Ardupilog % Does it inherit from anything?
             if (msgType == 128) % message is FMT
                 newType = fread(obj.fileID, 1, 'uint8', 0, 'l');
                 newLen = fread(obj.fileID, 1, 'uint8', 0, 'l');
-                newDataLen = newLen - 3; % The actual message length is 3 (header+ID bytes) + dataLen (bytes)
-
-                % Read 4 bytes, put into string, remove the last one if it's empty
-                newName = fread(obj.fileID, [1 4], 'uint8', 0, 'l');
-                % Remove any trailing space (zero-chars)
-                while newName(end)==0
-                    newName(end) = [];
-                end
+                newDataLen = newLen - 3; % The total length is 3 (header+ID bytes) + dataLen (bytes)
                 
-                newFmt =  fread(obj.fileID, [1 16], 'uint8', 0, 'l');
-                while newFmt(end)==0
-                    newFmt(end) = [];
-                end
+                newName = char(readBytesAndTrimTail(obj.fileID, 4));
+                newFmt =  char(readBytesAndTrimTail(obj.fileID, 16));
+                newLabels = char(readBytesAndTrimTail(obj.fileID, 64));
 
-                newLabels =  fread(obj.fileID, [1 64], 'uint8', 0, 'l');
-                while newLabels(end)==0
-                    newLabels(end) = [];
-                end
-
-                tbl_ndx = size(obj.logRecords,1)+1;
-                obj.logRecords{tbl_ndx,1} = newType;
-                obj.logRecords{tbl_ndx,2} = newDataLen;
-                obj.logRecords{tbl_ndx,3} = char(newName);
-                obj.logRecords{tbl_ndx,4} = char(newFmt);
-                obj.logRecords{tbl_ndx,5} = char(newLabels);
+                % HGM TODO: save delme as item in obj.logRecordsProperties array
+                delme = addprop(obj, newName);
+                % HGM END TODO
+                
+                obj.(newName) = MessageFormat(newType, newDataLen, newFmt, newLabels);
+                % keyboard
+                
+                tbl_ndx = size(obj.logRec_tbl,1)+1;
+                obj.logRec_tbl{tbl_ndx,1} = newType;
+                obj.logRec_tbl{tbl_ndx,2} = newDataLen;
+                obj.logRec_tbl{tbl_ndx,3} = newName;
+                obj.logRec_tbl{tbl_ndx,4} = newFmt;
+                obj.logRec_tbl{tbl_ndx,5} = newLabels;
             else % message is not FMT
-                logRecords_ndx = find([obj.logRecords{:,1}]==msgType);
-                if isempty(logRecords_ndx) % if message type unknown
+                logRec_tbl_ndx = find([obj.logRec_tbl{:,1}]==msgType);
+                if isempty(logRec_tbl_ndx) % if message type unknown
                     warning(['Unknown message type: number=', num2str(msgType)]);
                 else
                     % Extract data according to table
-                    msgData = fread(obj.fileID, [1 obj.logRecords{logRecords_ndx,2}], 'uint8', 0, 'l');
+                    msgData = fread(obj.fileID, [1 obj.logRec_tbl{logRec_tbl_ndx,2}], 'uint8', 0, 'l');
                     % if (msgType ~= 129)
                     %     obj.lastLineNum
                     %     msgType
@@ -128,6 +124,7 @@ classdef Ardupilog % Does it inherit from anything?
                 data(2) = fread(obj.fileID, 1, 'uint8', 0, 'l'); % read new byte into data(2)
             end
         end
+        
 
         % - What ends a message? Maybe readLogLine can find this?        
         % parseData % lvl 2... formats timestamps, converts units,
@@ -148,6 +145,16 @@ classdef Ardupilog % Does it inherit from anything?
         % end
     end
 end    
+
+function bytes = readBytesAndTrimTail(fileID, read_length);
+    bytes = fread(fileID, [1 read_length], 'uint8', 0, 'l');
+    % Remove any trailing space (zero-chars)
+    while bytes(end)==0
+        bytes(end) = [];
+    end
+end
+
+            
 
 % enum LogMessages {
 %     LOG_FORMAT_MSG = 128,
