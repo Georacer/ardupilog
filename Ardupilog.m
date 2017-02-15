@@ -50,33 +50,38 @@ classdef Ardupilog < dynamicprops
                 num_lines = 1e9;
             end
             for ctr = 1:num_lines
-                if feof(obj.fileID) ~= 0
+                if feof(obj.fileID) == 1
                     disp(['End of File, ', num2str(obj.lastLineNum), ' lines total.'])
                     % fclose(obj.fileID);
                     % return
                     break %TODO: verify this "break" inside if-else works correctly
                 else
                     obj = obj.readLogLine();
-                    if mod(obj.lastLineNum,1e4)==0
+                    if mod(obj.lastLineNum,5e3)==0
                         obj.lastLineNum
                     end
                 end
             end
 
+            disp(['Done processing ', num2str(obj.lastLineNum), ' lines, closing file.'])
+            
             % Close the file
             fclose(obj.fileID);
         end
         
         function obj = readLogLine(obj) % Reads a single log line
-            obj.lastLineNum = obj.lastLineNum + 1;
+            % Increment the (internal) log line number
+            lineNum = obj.lastLineNum + 1;
 
             % Read till \xA3,\x95 is found (dec=163,149)
             obj.findMsgStart();
             
             % Read msg id
-            msgType = fread(obj.fileID, 1, 'uint8', 0, 'l');
+            msgTypeNum = fread(obj.fileID, 1, 'uint8', 0, 'l');
             
-            if (msgType == 128) % message is FMT
+            if isempty(msgTypeNum) && feof(obj.fileID)
+                return
+            elseif (msgTypeNum == 128) % message is FMT
                 newType = fread(obj.fileID, 1, 'uint8', 0, 'l');
                 newLen = fread(obj.fileID, 1, 'uint8', 0, 'l');
                 newDataLen = newLen - 3; % The total length is 3 (header+ID bytes) + dataLen (bytes)
@@ -85,11 +90,17 @@ classdef Ardupilog < dynamicprops
                 newFmt =  char(readBytesAndTrimTail(obj.fileID, 16));
                 newLabels = char(readBytesAndTrimTail(obj.fileID, 64));
 
+                if length(newLabels) ~= 64 && feof(obj.fileID)
+                    % Did not get a complete FMT message, discard without action
+                    return
+                end
+                
                 % HGM TODO: save delme as item in obj.logRecordsProperties array
                 delme = addprop(obj, newName);
                 % HGM END TODO
                 
-                obj.(newName) = MessageFormat(newType, newDataLen, newFmt, newLabels);
+                obj.(newName) = MessageFormat();
+                obj.(newName).storeFormat(newType, newDataLen, newFmt, newLabels);
                 % keyboard
                 
                 tbl_ndx = size(obj.logRec_tbl,1)+1;
@@ -98,18 +109,29 @@ classdef Ardupilog < dynamicprops
                 obj.logRec_tbl{tbl_ndx,3} = newName;
                 obj.logRec_tbl{tbl_ndx,4} = newFmt;
                 obj.logRec_tbl{tbl_ndx,5} = newLabels;
+                
+                obj.lastLineNum = lineNum;
             else % message is not FMT
-                logRec_tbl_ndx = find([obj.logRec_tbl{:,1}]==msgType);
+                logRec_tbl_ndx = find([obj.logRec_tbl{:,1}]==msgTypeNum);
                 if isempty(logRec_tbl_ndx) % if message type unknown
-                    warning(['Unknown message type: number=', num2str(msgType)]);
+                    warning(['Unknown message type: number=', num2str(msgTypeNum)]);
+                    % Do nothing else, the search for next msg header will trash all the bytes
                 else
                     % Extract data according to table
-                    msgData = fread(obj.fileID, [1 obj.logRec_tbl{logRec_tbl_ndx,2}], 'uint8', 0, 'l');
-                    % if (msgType ~= 129)
-                    %     obj.lastLineNum
-                    %     msgType
-                    %     char(msgData)
-                    % end
+                    msgLength = obj.logRec_tbl{logRec_tbl_ndx,2};
+                    msgData = uint8(fread(obj.fileID, [1 msgLength], 'uint8', 0, 'l'));
+
+                    if length(msgData) < msgLength && feof(obj.fileID)
+                        % Did not get a complete message. Discard incomplete portion and return
+                        return
+                    end
+                    
+                    % Look up msgTypeNum to get msgName
+                    msgName = obj.logRec_tbl{logRec_tbl_ndx,3};
+                    
+                    % Store msgData correctly in that MessageFormat
+                    obj.(msgName).storeMsg(msgData);
+                    obj.lastLineNum = lineNum;
                 end
             end
         end
@@ -126,25 +148,9 @@ classdef Ardupilog < dynamicprops
         end
         
 
-        % - What ends a message? Maybe readLogLine can find this?        
         % parseData % lvl 2... formats timestamps, converts units,
-        % etc.
-        
-        % function msgType = readFileToComma()
-        %     msgType = '';
-        %     nextChar = fread(obj.fileID,1,'char')
-        %     while strcmp(nextChar, ',') == 0
-        %         if strcmp(nextChar, ' ') == 1
-        %             % Discard the (space) char
-        %         else
-        %             % Keep the (not-a-space) char in the string
-        %             msgType = [msgType, nextChar];
-        %         end
-        %         nextChar = fread(obj.fileID,1,'char');
-        %     end
-        % end
     end
-end    
+end
 
 function bytes = readBytesAndTrimTail(fileID, read_length);
     bytes = fread(fileID, [1 read_length], 'uint8', 0, 'l');
