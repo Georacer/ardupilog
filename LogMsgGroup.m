@@ -101,7 +101,7 @@ classdef LogMsgGroup < dynamicprops
                   case 'e' % int32_t * 100
                     fieldLen = 4;
                     fieldData = double(typecast(msgData(1:fieldLen),'int32'))/100;
-                  case 'C' % uint32_t * 100
+                  case 'E' % uint32_t * 100
                     fieldLen = 4;
                     fieldData = double(typecast(msgData(1:fieldLen),'uint32'))/100;
                   case 'L' % int32_t (Latitude/Longitude)
@@ -111,8 +111,8 @@ classdef LogMsgGroup < dynamicprops
                     fieldLen = 1;
                     fieldData = double(typecast(msgData(1:fieldLen),'uint8'));
                   otherwise
-                    warning('Unsupported format character: ',obj.fieldInfo(field_ndx).Description,...
-                            ' --- Storing data as uint8 array.');
+                    warning(['Unsupported format character: ',obj.fieldInfo(field_ndx).Description,...
+                            ' --- Storing data as uint8 array.']);
                 end
                 
                 % % HGM: Should we strip the zeros off the end of char-arrays (strings)?

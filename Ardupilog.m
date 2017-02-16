@@ -35,6 +35,7 @@ classdef Ardupilog < dynamicprops
 
             % If user pressed "cancel" then return without trying to process
             if all(obj.fileName == 0) && all(obj.filePathName == 0)
+                disp(['File not found: ', pathAndFileName])
                 return
             end
             
@@ -158,19 +159,19 @@ classdef Ardupilog < dynamicprops
 
             % Store msgData correctly in that LogMsgGroup
             obj.(msgName).storeMsg(lineNum, msgData);
-            
+                
             % Update lastLineNum to indicate log line processed
             obj.lastLineNum = lineNum;
         end
             
         function obj = findMsgStart(obj)
         % Read bytes from the file till the message-start character is found (dec=163,hex=A3)
-            data(1) = fread(obj.fileID, 1, 'uint8', 0, 'l');
-            data(2) = fread(obj.fileID, 1, 'uint8', 0, 'l');            
-            while (feof(obj.fileID)==0) && (data(1) ~= 163) && (data(2) ~= 149)
-                disp(['Warning: Trashing byte from log! hex=', dec2hex(data(1),2),' dec=', data(1),' char=',char(data(1))])
-                data(1) = data(2); % move data(2) to 1st pos, data(1) is now replaced
-                data(2) = fread(obj.fileID, 1, 'uint8', 0, 'l'); % read new byte into data(2)
+            b1 = fread(obj.fileID, 1, 'uint8', 0, 'l');
+            b2 = fread(obj.fileID, 1, 'uint8', 0, 'l');            
+            while (feof(obj.fileID)==0) && (b1 ~= 163) && (b2 ~= 149)
+                disp(['Warning: Trashing byte from log! hex=', dec2hex(b1,2),' dec=', b1,' char=',char(b1)])
+                b1 = b2; % move 2nd byte to 1st pos, old b1 is trashed
+                b2 = fread(obj.fileID, 1, 'uint8', 0, 'l'); % read new byte into b2
             end
         end
     end %methods
