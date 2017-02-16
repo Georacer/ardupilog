@@ -1,41 +1,44 @@
-% TODO HGM:
-% - Reconsider file opening/closing
-% - Does endian-ness matter?
+% HGM:
+% - Does endian-ness matter? How to make robust?
 % - Consider non-doubles for efficiency/speed/memory
 % - What's the difference between the "length" of a message as provided by FMT, vs the sum of the lengths of the field identifiers? (BQNnz, for example)
-% - Do we care about preserving the line number of the FMT message
-%    for a MessageFormat? (Right now, just neglect it.)
+%
+% This is hard-coded:
+% - The 128 (FMT) message must have fields "Name", "Type", and "Length" which specify other LogMsgGroups
 
 classdef Ardupilog < dynamicprops
-    properties
+    properties (Access = public)
+        fileName % name of .bin file
+        filePathName % path to .bin file
         % platform
         % version
         % bootTime
-        % logTypesNoData = MessageFormat();% An array of message formats without data (yet), instantiated with just the FMT type % 
-        logRecords = [];
-        logRec_tbl = cell(0,3);
-        fileName % name of .bin file
-        filePathName % path to .bin file
+    end
+    properties (Access = private)
         fileID = -1;
         lastLineNum = 0;
-        logRecordsProperties; % Will be array of meta.DynamicProperty items... can't figure out how to do this yet
-    end
+        fmt_name = 'FMT'; % (Just in case this string is ever re-defined in a log)
+    end %properties
     methods
         function obj = Ardupilog(pathAndFileName)
             if nargin == 0
+                % If constructor is empty, prompt user for log file
                 [filename, filepathname, ~] = uigetfile('*.bin','Select binary (.bin) log-file');
                 obj.fileName = filename;
                 obj.filePathName = filepathname;
             else
-                [filepathname, filename, extension] = fileparts(pathAndFileName);
+                % Use user-specified log file
+                [filepathname, filename, extension] = fileparts(which(pathAndFileName));
                 obj.filePathName = filepathname;
                 obj.fileName = [filename, extension];
             end
 
+            % If user pressed "cancel" then return without trying to process
             if all(obj.fileName == 0) && all(obj.filePathName == 0)
                 return
             end
             
+            % THE MAIN CALL: Begin reading specified log file
             obj = readLog(obj);
         end
 
@@ -47,26 +50,33 @@ classdef Ardupilog < dynamicprops
             num_lines = input(['How many log lines to display? ']);
             if isempty(num_lines)
                 disp('Processing entire log, could take a while...')
-                num_lines = 1e9;
+                num_lines = 1e14; % a big number, more lines than any log would have
             end
             for ctr = 1:num_lines
-                if feof(obj.fileID) == 1
-                    disp(['End of File, ', num2str(obj.lastLineNum), ' lines total.'])
-                    % fclose(obj.fileID);
-                    % return
-                    break %TODO: verify this "break" inside if-else works correctly
-                else
+                % If another log line exists, process it
+                if ~feof(obj.fileID)
+                    % The main call to process a single log line
                     obj = obj.readLogLine();
-                    if mod(obj.lastLineNum,5e3)==0
-                        obj.lastLineNum
-                    end
+                else % at end of file
+                    disp('Reached end of file.')
+                    break
+                end
+
+                % Display progress for user (TODO: Turn into waitbar)
+                if mod(obj.lastLineNum,5e3)==0
+                    obj.lastLineNum
                 end
             end
 
+            % Display message on completion
             disp(['Done processing ', num2str(obj.lastLineNum), ' lines, closing file.'])
             
             % Close the file
-            fclose(obj.fileID);
+            if fclose(obj.fileID) == 0;
+                obj.fileID = -1;
+            else
+                warn('File not closed successfully')
+            end
         end
         
         function obj = readLogLine(obj) % Reads a single log line
@@ -78,64 +88,81 @@ classdef Ardupilog < dynamicprops
             
             % Read msg id
             msgTypeNum = fread(obj.fileID, 1, 'uint8', 0, 'l');
-            
-            if isempty(msgTypeNum) && feof(obj.fileID)
-                return
-            elseif (msgTypeNum == 128) % message is FMT
-                newType = fread(obj.fileID, 1, 'uint8', 0, 'l');
-                newLen = fread(obj.fileID, 1, 'uint8', 0, 'l');
-                newDataLen = newLen - 3; % The total length is 3 (header+ID bytes) + dataLen (bytes)
-                
-                newName = char(readBytesAndTrimTail(obj.fileID, 4));
-                newFmt =  char(readBytesAndTrimTail(obj.fileID, 16));
-                newLabels = char(readBytesAndTrimTail(obj.fileID, 64));
 
-                if length(newLabels) ~= 64 && feof(obj.fileID)
+            % If file just ended, discard partial msg and quit
+            if feof(obj.fileID)
+                return
+            end
+
+            % Process message based on id
+            if (msgTypeNum == 128) % message is FMT
+                % Process FMT message to create a new dynamic property
+                msgData = uint8(fread(obj.fileID, [1 86], 'uint8', 0, 'l'));
+                
+                newType = msgData(1);
+                newLen = msgData(2); % Note: this is header+ID+dataLen = 2+1+dataLen.
+                
+                newName = char(trimTail(msgData([3:6])));
+                newFmt = char(trimTail(msgData([7:22])));
+                newLabels = char(trimTail(msgData([23:86])));
+                % newName = char(readBytesAndTrimTail(obj.fileID, 4));
+                % newFmt =  char(readBytesAndTrimTail(obj.fileID, 16));
+                % newLabels = char(readBytesAndTrimTail(obj.fileID, 64));
+
+                if length(newLabels) < 64 && feof(obj.fileID)
                     % Did not get a complete FMT message, discard without action
                     return
                 end
-                
-                % HGM TODO: save delme as item in obj.logRecordsProperties array
-                delme = addprop(obj, newName);
-                % HGM END TODO
-                
-                obj.(newName) = MessageFormat();
-                obj.(newName).storeFormat(newType, newDataLen, newFmt, newLabels);
-                % keyboard
-                
-                tbl_ndx = size(obj.logRec_tbl,1)+1;
-                obj.logRec_tbl{tbl_ndx,1} = newType;
-                obj.logRec_tbl{tbl_ndx,2} = newDataLen;
-                obj.logRec_tbl{tbl_ndx,3} = newName;
-                obj.logRec_tbl{tbl_ndx,4} = newFmt;
-                obj.logRec_tbl{tbl_ndx,5} = newLabels;
-                
-                obj.lastLineNum = lineNum;
-            else % message is not FMT
-                logRec_tbl_ndx = find([obj.logRec_tbl{:,1}]==msgTypeNum);
-                if isempty(logRec_tbl_ndx) % if message type unknown
-                    warning(['Unknown message type: number=', num2str(msgTypeNum)]);
-                    % Do nothing else, the search for next msg header will trash all the bytes
-                else
-                    % Extract data according to table
-                    msgLength = obj.logRec_tbl{logRec_tbl_ndx,2};
-                    msgData = uint8(fread(obj.fileID, [1 msgLength], 'uint8', 0, 'l'));
 
-                    if length(msgData) < msgLength && feof(obj.fileID)
-                        % Did not get a complete message. Discard incomplete portion and return
-                        return
-                    end
-                    
-                    % Look up msgTypeNum to get msgName
-                    msgName = obj.logRec_tbl{logRec_tbl_ndx,3};
-                    
-                    % Store msgData correctly in that MessageFormat
-                    obj.(msgName).storeMsg(msgData);
-                    obj.lastLineNum = lineNum;
+                % Create dynamic property of Ardupilog with newName
+                addprop(obj, newName);
+                % Instantiate LogMsgGroup class named newName
+                obj.(newName) = LogMsgGroup();
+                % Process FMT data
+                obj.(newName).storeFormat(newType, newLen, newFmt, newLabels);
+                
+                if (newType == 128)
+                    % Special case: first line is 128 (FMT) which defines 128 (FMT),
+                    %    so msgName can't be found in the FMT group yet. Use newName. 
+                    msgName = newName;
+                    obj.fmt_name = newName;
+                else
+                    % Usual case: find the msgName in the FMT LogMsgGroup
+                    msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum);                    
+                    msgName = trimTail(obj.(obj.fmt_name).Name(msgType_ndx,:));
                 end
-            end
+                
+            else % message is not FMT
+                % Look up msgTypeNum in known FMT.Type to get msgName
+                msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum);
+                if isempty(msgType_ndx) % if message type unknown
+                    warning(['Unknown message type: num=', num2str(msgTypeNum),...
+                             ' line=', num2str(lineNum)]);
+                    % Do nothing else, the search for next msg header will trash all the bytes
+                    return
+                end
+
+                % Find msgName from FMT LogMsgGroup
+                msgName = trimTail(obj.(obj.fmt_name).Name(msgType_ndx,:));
+
+                % Extract data according to table
+                msgLength = obj.(obj.fmt_name).Length(msgType_ndx);
+                readLength = msgLength - 3; % since header (2) and ID (1) bytes already read
+                msgData = uint8(fread(obj.fileID, [1 readLength], 'uint8', 0, 'l'));
+
+                if length(msgData) < readLength && feof(obj.fileID)
+                    % Did not get a complete message. Discard incomplete portion and return
+                    return
+                end
+            end % end special processing of FMT vs non-FMT messages
+
+            % Store msgData correctly in that LogMsgGroup
+            obj.(msgName).storeMsg(lineNum, msgData);
+            
+            % Update lastLineNum to indicate log line processed
+            obj.lastLineNum = lineNum;
         end
-        
+            
         function obj = findMsgStart(obj)
         % Read bytes from the file till the message-start character is found (dec=163,hex=A3)
             data(1) = fread(obj.fileID, 1, 'uint8', 0, 'l');
@@ -146,115 +173,12 @@ classdef Ardupilog < dynamicprops
                 data(2) = fread(obj.fileID, 1, 'uint8', 0, 'l'); % read new byte into data(2)
             end
         end
-        
+    end %methods
+end %classdef Ardupilog
 
-        % parseData % lvl 2... formats timestamps, converts units,
-    end
-end
-
-function bytes = readBytesAndTrimTail(fileID, read_length);
-    bytes = fread(fileID, [1 read_length], 'uint8', 0, 'l');
+function string = trimTail(string);
     % Remove any trailing space (zero-chars)
-    while bytes(end)==0
-        bytes(end) = [];
+    while string(end)==0
+        string(end) = [];
     end
 end
-
-            
-
-% enum LogMessages {
-%     LOG_FORMAT_MSG = 128,
-%     LOG_PARAMETER_MSG,
-%     LOG_GPS_MSG,
-%     LOG_GPS2_MSG,
-%     LOG_IMU_MSG,
-%     LOG_MESSAGE_MSG,
-%     LOG_RCIN_MSG,
-%     LOG_RCOUT_MSG,
-%     LOG_RSSI_MSG,
-%     LOG_IMU2_MSG,
-%     LOG_BARO_MSG,
-%     LOG_POWR_MSG,
-%     LOG_AHR2_MSG,
-%     LOG_SIMSTATE_MSG,
-%     LOG_CMD_MSG,
-%     LOG_RADIO_MSG,
-%     LOG_ATRP_MSG,
-%     LOG_CAMERA_MSG,
-%     LOG_IMU3_MSG,
-%     LOG_TERRAIN_MSG,
-%     LOG_GPS_UBX1_MSG,
-%     LOG_GPS_UBX2_MSG,
-%     LOG_GPS2_UBX1_MSG,
-%     LOG_GPS2_UBX2_MSG,
-%     LOG_ESC1_MSG,
-%     LOG_ESC2_MSG,
-%     LOG_ESC3_MSG,
-%     LOG_ESC4_MSG,
-%     LOG_ESC5_MSG,
-%     LOG_ESC6_MSG,
-%     LOG_ESC7_MSG,
-%     LOG_ESC8_MSG,
-%     LOG_BAR2_MSG,
-%     LOG_ARSP_MSG,
-%     LOG_ATTITUDE_MSG,
-%     LOG_CURRENT_MSG,
-%     LOG_CURRENT2_MSG,
-%     LOG_COMPASS_MSG,
-%     LOG_COMPASS2_MSG,
-%     LOG_COMPASS3_MSG,
-%     LOG_MODE_MSG,
-%     LOG_GPS_RAW_MSG,
-%     LOG_GPS_RAWH_MSG,
-%     LOG_GPS_RAWS_MSG,
-% 	LOG_GPS_SBF_EVENT_MSG,
-%     LOG_ACC1_MSG,
-%     LOG_ACC2_MSG,
-%     LOG_ACC3_MSG,
-%     LOG_GYR1_MSG,
-%     LOG_GYR2_MSG,
-%     LOG_GYR3_MSG,
-%     LOG_POS_MSG,
-%     LOG_PIDR_MSG,
-%     LOG_PIDP_MSG,
-%     LOG_PIDY_MSG,
-%     LOG_PIDA_MSG,
-%     LOG_PIDS_MSG,
-%     LOG_VIBE_MSG,
-%     LOG_IMUDT_MSG,
-%     LOG_IMUDT2_MSG,
-%     LOG_IMUDT3_MSG,
-%     LOG_ORGN_MSG,
-%     LOG_RPM_MSG,
-%     LOG_GPA_MSG,
-%     LOG_GPA2_MSG,
-%     LOG_RFND_MSG,
-%     LOG_BAR3_MSG,
-%     LOG_NKF1_MSG,
-%     LOG_NKF2_MSG,
-%     LOG_NKF3_MSG,
-%     LOG_NKF4_MSG,
-%     LOG_NKF5_MSG,
-%     LOG_NKF6_MSG,
-%     LOG_NKF7_MSG,
-%     LOG_NKF8_MSG,
-%     LOG_NKF9_MSG,
-%     LOG_NKF10_MSG,
-%     LOG_DF_MAV_STATS,
-
-%     LOG_MSG_SBPHEALTH,
-%     LOG_MSG_SBPLLH,
-%     LOG_MSG_SBPBASELINE,
-%     LOG_MSG_SBPTRACKING1,
-%     LOG_MSG_SBPTRACKING2,
-%     LOG_MSG_SBPRAW1,
-%     LOG_MSG_SBPRAW2,
-%     LOG_MSG_SBPRAWx,
-%     LOG_TRIGGER_MSG,
-
-%     LOG_GIMBAL1_MSG,
-%     LOG_GIMBAL2_MSG,
-%     LOG_GIMBAL3_MSG,
-%     LOG_RATE_MSG,
-%     LOG_RALLY_MSG,
-% };

@@ -1,41 +1,58 @@
-classdef MessageFormat < dynamicprops
-    properties
-        % timeRel % array of boot-relative time values
-        % timestamp % array of time values
-        % lineNo % line number in the .bin logfile
-        type % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
-        data_len % Length of data portion for this type messages (neglecting 2-byte header + 1-byte ID)
-        format % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
-        fieldnames_cell % Cell array of (ordered) field names. HGM TODO: Can't this be derived from the fieldProperties array?
-        fieldProperties; % Will be array of meta.DynamicProperty items
+classdef LogMsgGroup < dynamicprops
+    properties (Access = private)
+        type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
+        data_len = 0; % Len of data portion for this message (neglecting 2-byte header + 1-byte ID)
+        format = ''; % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
+        fieldInfo = []; % Array of meta.DynamicProperty items
     end
+    properties (Access = public)
+        % TimeRel % array of boot-relative time values
+        % Timestamp % array of time values
+        LineNo = [];
+    end
+    
     methods
-        function obj = MessageFormat(type_num, data_length, format_string, field_names_string)
+        function obj = LogMsgGroup(type_num, data_length, format_string, field_names_string)
             if nargin == 0
-                obj.type = -1;
-                obj.data_len = 0;
-                obj.format = '';
-            else
-                obj = obj.storeFormat(type_num, data_length, format_string, field_names_string);
+                % This is an empty constructor, MATLAB requires it to exist
+                return
             end
+            obj = obj.storeFormat(type_num, data_length, format_string, field_names_string);
         end
         
         function obj = storeFormat(obj, type_num, data_length, format_string, field_names_string)
+            fn_cell = strsplit(field_names_string,',');
+            % For each of the fields
+            for ndx = 1:length(fn_cell)
+                % Create a dynamic property with field name, and add to fieldInfo array
+                if isempty(obj.fieldInfo)
+                    obj.fieldInfo = addprop(obj, fn_cell{ndx});
+                else
+                    obj.fieldInfo(end+1) = addprop(obj, fn_cell{ndx});
+                end
+                
+                % Put field format char (e.g. Q, c, b, h, etc.) into 'Description' field
+                obj.fieldInfo(end).Description = format_string(ndx);
+            end
+
+            % Save FMT data into private properties (Not actually used anywhere?)
             obj.type = type_num;
             obj.data_len = data_length;
             obj.format = format_string;
-            obj.fieldnames_cell = strsplit(field_names_string,',');
-            for ndx = 1:length(obj.fieldnames_cell)
-                % HGM TODO: save delme as item in obj.fieldProperties array
-                delme = addprop(obj, obj.fieldnames_cell{ndx});
-                % HGM END TODO
-            end
         end
 
-        function obj = storeMsg(obj, msgData)
-            for field_ndx = 1:length(obj.format)
+        function obj = storeMsg(obj, lineNo, msgData)
+            % Record the line number
+            obj.LineNo(end+1,:) = lineNo;
+            
+            % Format and store the msgData appropriately
+            for field_ndx = 1:length(obj.fieldInfo)
+                % Find corresponding field name
+                fn_cell = {obj.fieldInfo.Name};
+                field_name_string = fn_cell{field_ndx};
+                
                 % select-and-format fieldData
-                switch obj.format(field_ndx)
+                switch obj.fieldInfo(field_ndx).Description
                   case 'b' % int8_t
                     fieldLen = 1;
                     fieldData = double(typecast(msgData(1:fieldLen),'int8'));
@@ -94,7 +111,7 @@ classdef MessageFormat < dynamicprops
                     fieldLen = 1;
                     fieldData = double(typecast(msgData(1:fieldLen),'uint8'));
                   otherwise
-                    warning('Unsupported format character: ',obj.format(field_ndx),...
+                    warning('Unsupported format character: ',obj.fieldInfo(field_ndx).Description,...
                             ' --- Storing data as uint8 array.');
                 end
                 
@@ -106,17 +123,14 @@ classdef MessageFormat < dynamicprops
                 %         fieldData(end) = [];
                 %     end
                 %     % store fieldData into correct field as cell array                    
-                %     obj.(obj.fieldnames_cell{field_ndx}) = {obj.(obj.fieldnames_cell{field_ndx});
-                %                                             fieldData};
+                %     obj.(field_name_string) = {obj.(field_name_string); fieldData};
                 % else
                 %     % store fieldData into correct field as matrix
-                %     obj.(obj.fieldnames_cell{field_ndx}) = [obj.(obj.fieldnames_cell{field_ndx});
-                %                                             fieldData];
+                %     obj.(field_name_string) = [obj.(field_name_string); fieldData];
                 % end
                 
                 % store fieldData into correct field
-                obj.(obj.fieldnames_cell{field_ndx}) = [obj.(obj.fieldnames_cell{field_ndx});
-                                                        fieldData];
+                obj.(field_name_string) = [obj.(field_name_string); fieldData];
                 
                 % remove fieldData from (remaining) msgData
                 msgData(1:fieldLen) = [];
