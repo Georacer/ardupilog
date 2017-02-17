@@ -6,7 +6,7 @@
 % This is hard-coded:
 % - The 128 (FMT) message must have fields "Name", "Type", and "Length" which specify other LogMsgGroups
 
-classdef Ardupilog < dynamicprops
+classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     properties (Access = public)
         fileName % name of .bin file
         filePathName % path to .bin file
@@ -40,10 +40,10 @@ classdef Ardupilog < dynamicprops
             end
             
             % THE MAIN CALL: Begin reading specified log file
-            obj = readLog(obj);
+            readLog(obj);
         end
 
-        function obj = readLog(obj)
+        function [] = readLog(obj)
             % Open a file at [filePathName filesep fileName]
             [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
 
@@ -57,7 +57,7 @@ classdef Ardupilog < dynamicprops
                 % If another log line exists, process it
                 if ~feof(obj.fileID)
                     % The main call to process a single log line
-                    obj = obj.readLogLine();
+                    obj.readLogLine();
                 else % at end of file
                     disp('Reached end of file.')
                     break
@@ -65,7 +65,7 @@ classdef Ardupilog < dynamicprops
 
                 % Display progress for user (TODO: Turn into waitbar)
                 if mod(obj.lastLineNum,5e3)==0
-                    obj.lastLineNum
+                    disp(obj.lastLineNum)
                 end
             end
 
@@ -80,7 +80,7 @@ classdef Ardupilog < dynamicprops
             end
         end
         
-        function obj = readLogLine(obj) % Reads a single log line
+        function [] = readLogLine(obj) % Reads a single log line
             % Increment the (internal) log line number
             lineNum = obj.lastLineNum + 1;
 
@@ -164,7 +164,7 @@ classdef Ardupilog < dynamicprops
             obj.lastLineNum = lineNum;
         end
             
-        function obj = findMsgStart(obj)
+        function [] = findMsgStart(obj)
         % Read bytes from the file till the message-start character is found (dec=163,hex=A3)
             b1 = fread(obj.fileID, 1, 'uint8', 0, 'l');
             b2 = fread(obj.fileID, 1, 'uint8', 0, 'l');            
@@ -177,7 +177,7 @@ classdef Ardupilog < dynamicprops
     end %methods
 end %classdef Ardupilog
 
-function string = trimTail(string);
+function string = trimTail(string)
     % Remove any trailing space (zero-chars)
     while string(end)==0
         string(end) = [];

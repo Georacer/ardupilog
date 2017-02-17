@@ -17,10 +17,10 @@ classdef LogMsgGroup < dynamicprops
                 % This is an empty constructor, MATLAB requires it to exist
                 return
             end
-            obj = obj.storeFormat(type_num, data_length, format_string, field_names_string);
+            obj.storeFormat(type_num, data_length, format_string, field_names_string);
         end
         
-        function obj = storeFormat(obj, type_num, data_length, format_string, field_names_string)
+        function [] = storeFormat(obj, type_num, data_length, format_string, field_names_string)
             fn_cell = strsplit(field_names_string,',');
             % For each of the fields
             for ndx = 1:length(fn_cell)
@@ -41,7 +41,7 @@ classdef LogMsgGroup < dynamicprops
             obj.format = format_string;
         end
 
-        function obj = storeMsg(obj, lineNo, msgData)
+        function [] = storeMsg(obj, lineNo, msgData)
             % Record the line number
             obj.LineNo(end+1,:) = lineNo;
             
