@@ -46,9 +46,12 @@ classdef Ardupilog < dynamicprops
         function obj = readLog(obj)
             % Open a file at [filePathName filesep fileName]
             [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
+            if ~isempty(errmsg)
+                error(errmsg);
+            end
 
             % Read messages one by one, either creating formats, moving to seen, or appending seen
-            num_lines = input(['How many log lines to display? ']);
+            num_lines = input('How many log lines to display? ');
             if isempty(num_lines)
                 disp('Processing entire log, could take a while...')
                 num_lines = 1e14; % a big number, more lines than any log would have
@@ -103,9 +106,9 @@ classdef Ardupilog < dynamicprops
                 newType = msgData(1);
                 newLen = msgData(2); % Note: this is header+ID+dataLen = 2+1+dataLen.
                 
-                newName = char(trimTail(msgData([3:6])));
-                newFmt = char(trimTail(msgData([7:22])));
-                newLabels = char(trimTail(msgData([23:86])));
+                newName = char(trimTail(msgData(3:6)));
+                newFmt = char(trimTail(msgData(7:22)));
+                newLabels = char(trimTail(msgData(23:86)));
                 % newName = char(readBytesAndTrimTail(obj.fileID, 4));
                 % newFmt =  char(readBytesAndTrimTail(obj.fileID, 16));
                 % newLabels = char(readBytesAndTrimTail(obj.fileID, 64));
@@ -129,7 +132,7 @@ classdef Ardupilog < dynamicprops
                     obj.fmt_name = newName;
                 else
                     % Usual case: find the msgName in the FMT LogMsgGroup
-                    msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum);                    
+                    msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum,1);                    
                     msgName = trimTail(obj.(obj.fmt_name).Name(msgType_ndx,:));
                 end
                 
@@ -177,7 +180,7 @@ classdef Ardupilog < dynamicprops
     end %methods
 end %classdef Ardupilog
 
-function string = trimTail(string);
+function string = trimTail(string)
     % Remove any trailing space (zero-chars)
     while string(end)==0
         string(end) = [];
