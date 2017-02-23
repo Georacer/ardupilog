@@ -124,9 +124,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
 
                 % Display progress for user
-                % if mod(obj.lastLineNum, 1e3) == 0 % every 1e3 messages
-                waitbar(ctr/obj.numMsgs, wb_handle, sprintf('%d of %d', obj.lastLineNum, obj.numMsgs));
-                % end
+                if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
+                    waitbar(ctr/obj.numMsgs, wb_handle, sprintf('%d of %d', obj.lastLineNum, obj.numMsgs));
+                end
             end
 
             delete(wb_handle);
