@@ -1,0 +1,104 @@
+Documentation for message fields
+
+Format characters in the format string for binary log messages
+  b   : int8_t
+  B   : uint8_t
+  h   : int16_t
+  H   : uint16_t
+  i   : int32_t
+  I   : uint32_t
+  f   : float
+  d   : double
+  n   : char[4]
+  N   : char[16]
+  Z   : char[64]
+  c   : int16_t * 100
+  C   : uint16_t * 100
+  e   : int32_t * 100
+  E   : uint32_t * 100
+  L   : int32_t latitude/longitude
+  M   : uint8_t flight mode
+  q   : int64_t
+  Q   : uint64_t
+
+
+ARM: 8	14	'ARM'	'QBH'	'TimeUS'    'ArmState'  'ArmChecks'
+https://github.com/ArduPilot/ardupilot/blob/152edf71891146abc588b86e5f4149405b794da1/ArduPlane/Log.cpp#L413
+    ArmState : (bool) The arming state (https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/AP_Arming/AP_Arming.cpp#L93)
+    ArmChecks: (uint16) The check bitmask (https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/AP_Arming/AP_Arming.cpp#L98)
+
+CURR: "QhhhHfh","TimeUS,Throttle,Volt,Curr,Vcc,CurrTot,Volt2"
+https://github.com/ArduPilot/ardupilot/blob/43c7b4d5181eb31ec91a112b1add1bfe22941006/libraries/DataFlash/LogFile.cpp#L1640
+    Throttle: As recorded from autopilot (max 100 for Plane, max 1000 for copter)
+    Volt    : (100*Volts) Battery voltage
+    Curr    : (100*Amperes) Battery current draw
+    Vcc     : (1000*Amperes) Board voltage
+    CurrTot : (mAh) Total current draw
+    Volt2   : (100*Volts) Secondary battery voltage
+CURR: 168, 23, CURR, Qfff, TimeUS,Volt,Curr,CurrTot
+    Since   : ArduPlane 3.6.0, Copter 3.4.0 https://github.com/ArduPilot/ardupilot/commit/3ed2fafefa2981d9ea720b552ba405dbeae37eca
+https://github.com/ArduPilot/ardupilot/blob/3ed2fafefa2981d9ea720b552ba405dbeae37eca/libraries/DataFlash/LogFile.cpp#L1641
+    Volt    : (Volts) Battery voltage
+    Curr    : (Amperes) Battery current draw
+    CurrTot : (mAh) Total current draw
+
+POWR: "QffH","TimeUS,Vcc,VServo,Flags"
+    Since   : ArduPlane 3.6.0, Copter 3.4.0 https://github.com/ArduPilot/ardupilot/commit/7a397475afd868a806de37fe41249bc3f97d92a1#diff-50fc6924592925cd3572aff05385f2b2
+    Vcc     : (Volts) Board voltage
+    VServo  : (Volts) Servo rail voltage
+    Flags   : (bitmask) Power error flags https://github.com/mavlink/mavlink/blob/master/message_definitions/v1.0/common.xml#L1793
+                                          https://github.com/ArduPilot/ardupilot/blob/ArduPlane-3.6.0/libraries/AP_HAL_PX4/AnalogIn.cpp#L351
+
+
+MAG: "QhhhhhhhhhBI", "TimeUS,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOfsX,MOfsY,MOfsZ,Health"
+    Since           : ArduPlane 3.3.0, Copter-3.3-rc5 https://github.com/ArduPilot/ardupilot/commit/b0937154f5545d47749daa92cd19a4fbc261029d
+    mag_x           : (milliGauss) Compass magnetic field X https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/AP_Compass/AP_Compass.h#L119
+    mag_y           : (milliGauss) Compass magnetic field Y
+    mag_z           : (milliGauss) Compass magnetic field Z
+    offset_x        : (milliGauss) Compass offset X https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/AP_Compass/AP_Compass.h#L151
+    offset_y        : (milliGauss) Compass offset Y  
+    offset_z        : (milliGauss) Compass offset Z
+    motor_offset_x  : (milliGauss) Motor compensation offset X https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/AP_Compass/AP_Compass.h#L228
+    motor_offset_y  : (milliGauss) Motor compensation offset Y
+    motor_offset_z  : (milliGauss) Motor compensation offset Z
+    health          : (boolean) Compass health (last talked at most 500ms ago) https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/AP_Compass/AP_Compass.cpp#L602
+
+MAG: "QhhhhhhhhhBI", "TimeUS,MagX,MagY,MagZ,OfsX,OfsY,OfsZ,MOfsX,MOfsY,MOfsZ,Health,S"
+    Since   : ArduPlane 3.6.0, Copter 3.4.0 https://github.com/ArduPilot/ardupilot/commit/61da827c16266a50cd004355f79e4e2fbf38b91e
+    S       : (microSeconds) last update time
+
+IMU: "QffffffIIfBB", "TimeUS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ,ErrG,ErrA,Temp,GyHlt,AcHlt"
+    Since           : ArduPlane 3.5.1, Copter-3.4 https://github.com/ArduPilot/ardupilot/commit/121967d1b18a557b07bf741c044793dc1f5c1e9c
+                                                  https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/DataFlash/LogFile.cpp#L879
+    GyrX            : (UNKNOWN UNITS)
+    GyrY            : (UNKNOWN UNITS)
+    GyrZ            : (UNKNOWN UNITS)
+    AccX            : (UNKNOWN UNITS)
+    AccY            : (UNKNOWN UNITS)
+    AccZ            : (UNKNOWN UNITS)
+    ErrG            : (int) count of gyro errors
+    ErrA            : (int) count of accel errors
+    Temp            : (UNKNOWN UNITS)
+    GyHlt           : (boolean) Test if gyro errors have increased https://github.com/ArduPilot/ardupilot/blob/c808ee2f497e7a7a6d570632a3224e655b377323/libraries/AP_InertialSensor/AP_InertialSensor.cpp#L1055
+    AcHlt           : (boolean) Same as above
+
+PM: QIHIhhhBH,{TimeUS,LTime,MLC,gDt,GDx,GDy,GDz,I2CErr,INSErr}
+    Since : ArduPlane-2.27b ArduCopter-3.1.0-rc7 https://github.com/ArduPilot/ardupilot/commit/c01a3debd66ddcb8427b12e4b8fe04a4f0eaebb1
+    loop time : (ms) time since start
+    main loop count : (UNKNOWN UNITS) main loop count
+    gDt : (UNKNOWN UNITS) perf.G_Dt_max
+    gyro drift x : (1000*UNKNOWN_UNITS) gyro drift x
+    gyro drift y : (1000*UNKNOWN_UNITS) gyro drift y
+    gyro drift z : (1000*UNKNOWN_UNITS) gyro drift z
+    i2c lockup count : (units)
+    ins error count : (units)
+
+PM: QHHIII,{TimeUS,NLon,NLoop,MaxT,MinT,LogDrop}
+    Since : ArduPlane 3.6.0, Copter-3.4.0 https://github.com/ArduPilot/ardupilot/commit/8683616d8c87c2e54c28cd5fb8ee52500172c4fd
+                                          https://github.com/ArduPilot/ardupilot/commit/cf7b6123a99f1a176fd05235f73df581b3ed42ba
+                                          Also see here: https://github.com/ArduPilot/ardupilot/blob/bae9ce20c1a5a92c2f674c21080df9621af3eceb/ArduPlane/Plane.h#L762
+    num longs : (Units) Number of loops that exceeded allocated loop time by 500us (long loops)
+    main loop count : (UNKNOWN UNITS) main loop count since last reporting
+    MaxT : (us) maximum recorded loop time
+    MinT : (us) minimum recorded loop time
+    LogDrop : (Units) accumulated number of lost log messages
