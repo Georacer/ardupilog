@@ -4,6 +4,7 @@ classdef LogMsgGroup < dynamicprops
         data_len = 0; % Len of data portion for this message (neglecting 2-byte header + 1-byte ID)
         format = ''; % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
         fieldInfo = []; % Array of meta.DynamicProperty items
+        fieldNameCell = {}; % Cell-array of field names, to reduce run-time
     end
     properties (Access = public)
         % TimeRel % array of boot-relative time values
@@ -17,18 +18,18 @@ classdef LogMsgGroup < dynamicprops
                 % This is an empty constructor, MATLAB requires it to exist
                 return
             end
-            obj = obj.storeFormat(type_num, data_length, format_string, field_names_string);
+            obj.storeFormat(type_num, data_length, format_string, field_names_string);
         end
         
-        function obj = storeFormat(obj, type_num, data_length, format_string, field_names_string)
-            fn_cell = strsplit(field_names_string,',');
+        function [] = storeFormat(obj, type_num, data_length, format_string, field_names_string)
+            obj.fieldNameCell = strsplit(field_names_string,',');
             % For each of the fields
-            for ndx = 1:length(fn_cell)
+            for ndx = 1:length(obj.fieldNameCell)
                 % Create a dynamic property with field name, and add to fieldInfo array
                 if isempty(obj.fieldInfo)
-                    obj.fieldInfo = addprop(obj, fn_cell{ndx});
+                    obj.fieldInfo = addprop(obj, obj.fieldNameCell{ndx});
                 else
-                    obj.fieldInfo(end+1) = addprop(obj, fn_cell{ndx});
+                    obj.fieldInfo(end+1) = addprop(obj, obj.fieldNameCell{ndx});
                 end
                 
                 % Put field format char (e.g. Q, c, b, h, etc.) into 'Description' field
@@ -41,15 +42,14 @@ classdef LogMsgGroup < dynamicprops
             obj.format = format_string;
         end
 
-        function obj = storeMsg(obj, lineNo, msgData)
+        function [] = storeMsg(obj, lineNo, msgData)
             % Record the line number
             obj.LineNo(end+1,:) = lineNo;
             
             % Format and store the msgData appropriately
             for field_ndx = 1:length(obj.fieldInfo)
                 % Find corresponding field name
-                fn_cell = {obj.fieldInfo.Name};
-                field_name_string = fn_cell{field_ndx};
+                field_name_string = obj.fieldNameCell{field_ndx};
                 
                 % select-and-format fieldData
                 switch obj.fieldInfo(field_ndx).Description
@@ -114,21 +114,7 @@ classdef LogMsgGroup < dynamicprops
                     warning(['Unsupported format character: ',obj.fieldInfo(field_ndx).Description,...
                             ' --- Storing data as uint8 array.']);
                 end
-                
-                % % HGM: Should we strip the zeros off the end of char-arrays (strings)?
-                % %  Pro: saves space, generally our strings are trimmed
-                % %  Con: can't put strings of unequal length in a char-matrix, would need a cell-array
-                % if any(strcmp({'n','N','Z'}, obj.format(field_ndx)))
-                %     while fieldData(end)==0
-                %         fieldData(end) = [];
-                %     end
-                %     % store fieldData into correct field as cell array                    
-                %     obj.(field_name_string) = {obj.(field_name_string); fieldData};
-                % else
-                %     % store fieldData into correct field as matrix
-                %     obj.(field_name_string) = [obj.(field_name_string); fieldData];
-                % end
-                
+
                 % store fieldData into correct field
                 obj.(field_name_string) = [obj.(field_name_string); fieldData];
                 
