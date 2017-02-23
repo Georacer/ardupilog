@@ -19,6 +19,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         fileID = -1;
         lastLineNum = 0;
         fmt_name = 'FMT'; % (Just in case this string is ever re-defined in a log)
+        header1 = 163; % First ("temporary") header byte
+        header2 = 149; % Second header byte
     end %properties
     methods
         function obj = Ardupilog(pathAndFileName)
@@ -45,47 +47,77 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
         
         function [] = countMsgs(obj)
-            if obj.fileID==-1
-                error('Log file should be open upon call');
+        % Open file, count number of headers = number of messages, close file
+            % Open a file at [filePathName filesep fileName]
+            [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
+            if ~isempty(errmsg) || obj.fileID==-1
+                error(errmsg);
             end
-            
-            readsize = 1024*1024;
+
+            readsize = 1024*1024; % Block size to read before performing a count
                         
-            indices = [];
-            carry = [];
+            indices = []; % Array to count header-messages
+            carry = []; % In case a read accidentally splits a header-message
                         
             while feof(obj.fileID)==0
+                % Read a block of the file
                 batch = [carry fread(obj.fileID,readsize)'];
                 if isempty(batch)
                     break
                 end
-                if batch(end)==163
-                    carry = 163;
+                % If the ending of the block is inside the header
+                if batch(end)==obj.header1
+                    % Carry the header to the next batch
+                    carry = batch(end);
                 else
                     carry = [];
                 end
-                indices = [indices strfind(batch,[163 149])];
+                % Append the index-count of the header message
+                indices = [indices strfind(batch,[obj.header1 obj.header2])];
             end
             
+            % The number of header occurances is the number of messages
             obj.numMsgs = length(indices);
+            
+            % Close the file
+            if fclose(obj.fileID) == 0;
+                obj.fileID = -1;
+            else
+                error('File not closed successfully, find out why before proceeding.')
+            end
+
         end
 
         function [] = readLog(obj)
-            % Open a file at [filePathName filesep fileName]
-            [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
 
-            % Count how many message are in the log file
+            % Count how many message are in the log file (opens, reads, and closes the file)
             obj.countMsgs();
             
-            % Read messages one by one, either creating formats, moving to seen, or appending seen
-            num_lines = input(sprintf('How many log lines to display? (%d total): ',obj.numMsgs));
-            if isempty(num_lines)
-                disp('Processing entire log, could take a while...')
-                num_lines = 1e14; % a big number, more lines than any log would have
+            % Open a file at [filePathName filesep fileName]
+            [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
+            if ~isempty(errmsg) || obj.fileID==-1
+                error(errmsg);
             end
+
+            % Read messages one by one, either creating formats, moving to seen, or appending seen
+            num_lines = input(sprintf(['How many log lines to process? (%d total, press Enter to process all): '],obj.numMsgs));
+            waitbar_max_lines = num_lines;
+            if isempty(num_lines)
+                num_lines = obj.numMsgs*10; % numMsgs should be accurate, the *10 is "just in case"...
+                waitbar_max_lines = obj.numMsgs;
+            end
+            wb_handle = waitbar(0, 'Initializing...', ...
+                         'Name', ['Processing log: ', obj.fileName], ...
+                         'CreateCancelBtn', 'setappdata(gcbf, ''cancel'', 1)');
+            setappdata(wb_handle,'cancel',0);
             for ctr = 1:num_lines
-                % If another log line exists, process it
+                % If another log line exists, process itsprint
                 if ~feof(obj.fileID)
+                    % Check to see if user pressed cancel button
+                    if getappdata(wb_handle, 'cancel') == 1
+                        disp('Canceled by user')
+                        break
+                    end
                     % The main call to process a single log line
                     obj.readLogLine();
                 else % at end of file
@@ -93,12 +125,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     break
                 end
 
-                % Display progress for user (TODO: Turn into waitbar)
-                if mod(obj.lastLineNum,5e3)==0
-                    disp(obj.lastLineNum)
+                % Display progress for user
+                if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
+                    waitbar(ctr/waitbar_max_lines, wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
                 end
             end
 
+            delete(wb_handle);
             % Display message on completion
             disp(['Done processing ', num2str(obj.lastLineNum), ' lines, closing file.'])
             
@@ -133,9 +166,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 newType = msgData(1);
                 newLen = msgData(2); % Note: this is header+ID+dataLen = 2+1+dataLen.
                 
-                newName = char(trimTail(msgData([3:6])));
-                newFmt = char(trimTail(msgData([7:22])));
-                newLabels = char(trimTail(msgData([23:86])));
+                newName = char(trimTail(msgData(3:6)));
+                newFmt = char(trimTail(msgData(7:22)));
+                newLabels = char(trimTail(msgData(23:86)));
                 % newName = char(readBytesAndTrimTail(obj.fileID, 4));
                 % newFmt =  char(readBytesAndTrimTail(obj.fileID, 16));
                 % newLabels = char(readBytesAndTrimTail(obj.fileID, 64));
@@ -159,7 +192,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     obj.fmt_name = newName;
                 else
                     % Usual case: find the msgName in the FMT LogMsgGroup
-                    msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum);                    
+                    msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum,1);                    
                     msgName = trimTail(obj.(obj.fmt_name).Name(msgType_ndx,:));
                 end
                 
@@ -198,7 +231,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % Read bytes from the file till the message-start character is found (dec=163,hex=A3)
             b1 = fread(obj.fileID, 1, 'uint8', 0, 'l');
             b2 = fread(obj.fileID, 1, 'uint8', 0, 'l');            
-            while (feof(obj.fileID)==0) && (b1 ~= 163) && (b2 ~= 149)
+            while (feof(obj.fileID)==0) && (b1 ~= obj.header1) && (b2 ~= obj.header2)
                 disp(['Warning: Trashing byte from log! hex=', dec2hex(b1,2),' dec=', b1,' char=',char(b1)])
                 b1 = b2; % move 2nd byte to 1st pos, old b1 is trashed
                 b2 = fread(obj.fileID, 1, 'uint8', 0, 'l'); % read new byte into b2
