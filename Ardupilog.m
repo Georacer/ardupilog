@@ -101,6 +101,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
             % Read messages one by one, either creating formats, moving to seen, or appending seen
             num_lines = input(sprintf(['How many log lines to process? (%d total, press Enter to process all): '],obj.numMsgs));
+            waitbar_max_lines = num_lines;
             if isempty(num_lines)
                 num_lines = obj.numMsgs*10; % numMsgs should be accurate, the *10 is "just in case"...
             end
@@ -125,7 +126,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
                 % Display progress for user
                 if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
-                    waitbar(ctr/num_lines, wb_handle, sprintf('%d of %d', obj.lastLineNum, num_lines));
+                    waitbar(ctr/waitbar_max_lines, wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
                 end
             end
 
