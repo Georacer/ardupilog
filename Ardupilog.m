@@ -13,6 +13,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % platform
         % version
         % bootTime
+        numMsgs
     end
     properties (Access = private)
         fileID = -1;
@@ -42,13 +43,42 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % THE MAIN CALL: Begin reading specified log file
             readLog(obj);
         end
+        
+        function [] = countMsgs(obj)
+            if obj.fileID==-1
+                error('Log file should be open upon call');
+            end
+            
+            readsize = 1024*1024;
+                        
+            indices = [];
+            carry = [];
+                        
+            while feof(obj.fileID)==0
+                batch = [carry fread(obj.fileID,readsize)'];
+                if isempty(batch)
+                    break
+                end
+                if batch(end)==163
+                    carry = 163;
+                else
+                    carry = [];
+                end
+                indices = [indices strfind(batch,[163 149])];
+            end
+            
+            obj.numMsgs = length(indices);
+        end
 
         function [] = readLog(obj)
             % Open a file at [filePathName filesep fileName]
             [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
 
+            % Count how many message are in the log file
+            obj.countMsgs();
+            
             % Read messages one by one, either creating formats, moving to seen, or appending seen
-            num_lines = input(['How many log lines to display? ']);
+            num_lines = input(sprintf('How many log lines to display? (%d total): ',obj.numMsgs));
             if isempty(num_lines)
                 disp('Processing entire log, could take a while...')
                 num_lines = 1e14; % a big number, more lines than any log would have
