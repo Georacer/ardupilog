@@ -22,6 +22,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         header = [163 149]; % Message header as defined in ArduPilot
         log_data = char(0); % The .bin file data as a row-matrix of chars (uint8's)
         log_data_read_ndx = 0; % The index of the last byte processed from the data
+        wb_handle; % Handle to the waitbar, used to delete it in case of error
     end %properties
     methods
         function obj = Ardupilog(pathAndFileName)
@@ -48,6 +49,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Clear out the (temporary) properties
             obj.log_data = char(0);
             obj.log_data_read_ndx = 0;
+        end
+        
+        function delete(obj)
+            % If Ardupilog errors, close the waitbar
+            delete(obj.wb_handle);
+            % Probably won't ever be open, but close the file too, just in case
+            fclose(obj.fileID);
         end
         
         function [] = readLog(obj)
@@ -81,17 +89,17 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 num_lines = obj.numMsgs*10; % numMsgs should be accurate, the *10 is "just in case"...
                 waitbar_max_lines = obj.numMsgs;
             end
-            wb_handle = waitbar(0, 'Initializing...', ...
+            obj.wb_handle = waitbar(0, 'Initializing...', ...
                          'Name', ['Processing log: ', obj.fileName], ...
                          'CreateCancelBtn', 'setappdata(gcbf, ''cancel_pressed'', 1)');
-            setappdata(wb_handle,'cancel_pressed',0);
+            setappdata(obj.wb_handle,'cancel_pressed',0);
 
             % Process messages one by one, either creating formats, moving to seen, or appending seen
             for ctr = 1:num_lines % HGM: Consider replacing for-loop with while loop?
                 % If another log line exists, process it
                 if obj.log_data_read_ndx < numel(obj.log_data);
                     % Check to see if user pressed cancel button
-                    if getappdata(wb_handle, 'cancel_pressed') == 1
+                    if getappdata(obj.wb_handle, 'cancel_pressed') == 1
                         disp('Canceled by user')
                         break
                     end
@@ -105,11 +113,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
                 % Display progress for user
                 if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
-                    waitbar(ctr/waitbar_max_lines, wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
+                    waitbar(ctr/waitbar_max_lines, obj.wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
                 end
             end
 
-            delete(wb_handle);
+            delete(obj.wb_handle);
             
             % Display message on completion
             disp(['Done processing ', num2str(obj.lastLineNum), ' lines.'])
