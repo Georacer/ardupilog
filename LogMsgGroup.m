@@ -45,7 +45,6 @@ classdef LogMsgGroup < dynamicprops
         function [] = storeMsg(obj, lineNo, msgData)
             % Record the line number
             obj.LineNo(end+1,:) = lineNo;
-            
             % Format and store the msgData appropriately
             for field_ndx = 1:length(obj.fieldInfo)
                 % Find corresponding field name
