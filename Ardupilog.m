@@ -54,8 +54,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         function delete(obj)
             % If Ardupilog errors, close the waitbar
             delete(obj.wb_handle);
-            % Probably won't ever be open, but close the file too, just in case
-            fclose(obj.fileID);
+            % Probably won't ever be open, but try to close the file too, just in case
+            if ~isempty(fopen('all')) && any(fopen('all')==obj.fileID)
+                fclose(obj.fileID);
+            end
         end
         
         function [] = readLog(obj)
