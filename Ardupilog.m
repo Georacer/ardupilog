@@ -19,8 +19,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         fileID = -1;
         lastLineNum = 0;
         fmt_name = 'FMT'; % (Just in case this string is ever re-defined in a log)
-        header1 = 163; % First ("temporary") header byte
-        header2 = 149; % Second header byte
+        header = [163 149]; % Message header as defined in ArduPilot
+        log_data = char(0); % The .bin file data as a row-matrix of chars (uint8's)
+        log_data_read_ndx = 0; % The index of the last byte processed from the data
+        wb_handle; % Handle to the waitbar, used to delete it in case of error
     end %properties
     methods
         function obj = Ardupilog(pathAndFileName)
@@ -38,145 +40,125 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
             % If user pressed "cancel" then return without trying to process
             if all(obj.fileName == 0) && all(obj.filePathName == 0)
-                disp(['File not found: ', pathAndFileName])
                 return
             end
             
             % THE MAIN CALL: Begin reading specified log file
             readLog(obj);
+            
+            % Clear out the (temporary) properties
+            obj.log_data = char(0);
+            obj.log_data_read_ndx = 0;
         end
         
-        function [] = countMsgs(obj)
-        % Open file, count number of headers = number of messages, close file
-            % Open a file at [filePathName filesep fileName]
-            [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
-            if ~isempty(errmsg) || obj.fileID==-1
-                error(errmsg);
+        function delete(obj)
+            % If Ardupilog errors, close the waitbar
+            delete(obj.wb_handle);
+            % Probably won't ever be open, but try to close the file too, just in case
+            if ~isempty(fopen('all')) && any(fopen('all')==obj.fileID)
+                fclose(obj.fileID);
             end
-
-            readsize = 1024*1024; % Block size to read before performing a count
-                        
-            indices = []; % Array to count header-messages
-            carry = []; % In case a read accidentally splits a header-message
-                        
-            while feof(obj.fileID)==0
-                % Read a block of the file
-                batch = [carry fread(obj.fileID,readsize)'];
-                if isempty(batch)
-                    break
-                end
-                % If the ending of the block is inside the header
-                if batch(end)==obj.header1
-                    % Carry the header to the next batch
-                    carry = batch(end);
-                else
-                    carry = [];
-                end
-                % Append the index-count of the header message
-                indices = [indices strfind(batch,[obj.header1 obj.header2])];
-            end
-            
-            % The number of header occurances is the number of messages
-            obj.numMsgs = length(indices);
-            
-            % Close the file
-            if fclose(obj.fileID) == 0;
-                obj.fileID = -1;
-            else
-                error('File not closed successfully, find out why before proceeding.')
-            end
-
         end
-
+        
         function [] = readLog(obj)
+        % Open file, read all data, count number of headers = number of messages, process data, close file
 
-            % Count how many message are in the log file (opens, reads, and closes the file)
-            obj.countMsgs();
-            
             % Open a file at [filePathName filesep fileName]
-            [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName],'r');
+            [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName], 'r');
             if ~isempty(errmsg) || obj.fileID==-1
                 error(errmsg);
             end
 
-            % Read messages one by one, either creating formats, moving to seen, or appending seen
-            num_lines = input(sprintf(['How many log lines to process? (%d total, press Enter to process all): '],obj.numMsgs));
-            waitbar_max_lines = num_lines;
-            if isempty(num_lines)
-                num_lines = obj.numMsgs*10; % numMsgs should be accurate, the *10 is "just in case"...
-                waitbar_max_lines = obj.numMsgs;
-            end
-            wb_handle = waitbar(0, 'Initializing...', ...
-                         'Name', ['Processing log: ', obj.fileName], ...
-                         'CreateCancelBtn', 'setappdata(gcbf, ''cancel'', 1)');
-            setappdata(wb_handle,'cancel',0);
-            for ctr = 1:num_lines
-                % If another log line exists, process itsprint
-                if ~feof(obj.fileID)
-                    % Check to see if user pressed cancel button
-                    if getappdata(wb_handle, 'cancel') == 1
-                        disp('Canceled by user')
-                        break
-                    end
-                    % The main call to process a single log line
-                    obj.readLogLine();
-                else % at end of file
-                    disp('Reached end of file.')
-                    break
-                end
+            % Define the read-size (inf=read whole file) and read the logfile
+            readsize = inf; % Block size to read before performing a count
+            obj.log_data = fread(obj.fileID, [1, readsize], '*uchar'); % Read the datafile entirely
 
-                % Display progress for user
-                if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
-                    waitbar(ctr/waitbar_max_lines, wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
-                end
-            end
-
-            delete(wb_handle);
-            % Display message on completion
-            disp(['Done processing ', num2str(obj.lastLineNum), ' lines, closing file.'])
-            
             % Close the file
             if fclose(obj.fileID) == 0;
                 obj.fileID = -1;
             else
                 warn('File not closed successfully')
             end
+
+            % The number of header occurances is a good estimate at the number of messages
+            % -- (If the header occurs "accidentally" in the data, this count will be wrong)
+            obj.numMsgs = length(strfind(obj.log_data, obj.header));
+            
+            % Prompt user to choose how many messages to process, and setup GUI waitbar
+            num_lines = input(sprintf('How many log lines to process? (%d total, press Enter to process all): ', obj.numMsgs));
+            waitbar_max_lines = num_lines;
+            if isempty(num_lines)
+                num_lines = obj.numMsgs*10; % numMsgs should be accurate, the *10 is "just in case"...
+                waitbar_max_lines = obj.numMsgs;
+            end
+            obj.wb_handle = waitbar(0, 'Initializing...', ...
+                         'Name', ['Processing log: ', obj.fileName], ...
+                         'CreateCancelBtn', 'setappdata(gcbf, ''cancel_pressed'', 1)');
+            setappdata(obj.wb_handle,'cancel_pressed',0);
+
+            % Process messages one by one, either creating formats, moving to seen, or appending seen
+            for ctr = 1:num_lines % HGM: Consider replacing for-loop with while loop?
+                % If another log line exists, process it
+                if obj.log_data_read_ndx < numel(obj.log_data);
+                    % Check to see if user pressed cancel button
+                    if getappdata(obj.wb_handle, 'cancel_pressed') == 1
+                        disp('Canceled by user')
+                        break
+                    end
+                    % The main call to process a single log line
+                    obj.readLogLine();
+                else % at end of file
+                    disp('Reached end of log.')
+                    obj.numMsgs = obj.lastLineNum;
+                    break
+                end
+
+                % Display progress for user
+                if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
+                    waitbar(ctr/waitbar_max_lines, obj.wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
+                end
+            end
+
+            delete(obj.wb_handle);
+            
+            % Display message on completion
+            disp(['Done processing ', num2str(obj.lastLineNum), ' lines.'])
         end
         
         function [] = readLogLine(obj) % Reads a single log line
             % Increment the (internal) log line number
             lineNum = obj.lastLineNum + 1;
 
-            % Read till \xA3,\x95 is found (dec=163,149)
+            % Read till \xA3,\x95 is found (dec=163,149) and position log_data_read_ndx there
             obj.findMsgStart();
-            
-            % Read msg id
-            msgTypeNum = fread(obj.fileID, 1, 'uint8', 0, 'l');
 
-            % If file just ended, discard partial msg and quit
-            if feof(obj.fileID)
+            % Read the header and msgTypeNum
+            msgHeaderAndMsgTypeNum = obj.readLogData(length(obj.header)+1);
+
+            if isempty(msgHeaderAndMsgTypeNum)
+                % Log had header, but ended there, no msgTypeNum.
                 return
             end
+                        
+            % Read msg id
+            msgTypeNum = msgHeaderAndMsgTypeNum(end);
 
             % Process message based on id
             if (msgTypeNum == 128) % message is FMT
                 % Process FMT message to create a new dynamic property
-                msgData = uint8(fread(obj.fileID, [1 86], 'uint8', 0, 'l'));
+                msgData = obj.readLogData(86);
+
+                if isempty(msgData)
+                    % If a full msg doesn't exist
+                    return
+                end
                 
                 newType = msgData(1);
-                newLen = msgData(2); % Note: this is header+ID+dataLen = 2+1+dataLen.
+                newLen = msgData(2); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
                 
                 newName = char(trimTail(msgData(3:6)));
                 newFmt = char(trimTail(msgData(7:22)));
                 newLabels = char(trimTail(msgData(23:86)));
-                % newName = char(readBytesAndTrimTail(obj.fileID, 4));
-                % newFmt =  char(readBytesAndTrimTail(obj.fileID, 16));
-                % newLabels = char(readBytesAndTrimTail(obj.fileID, 64));
-
-                if length(newLabels) < 64 && feof(obj.fileID)
-                    % Did not get a complete FMT message, discard without action
-                    return
-                end
 
                 % Create dynamic property of Ardupilog with newName
                 addprop(obj, newName);
@@ -198,7 +180,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 
             else % message is not FMT
                 % Look up msgTypeNum in known FMT.Type to get msgName
-                msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum);
+                msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum,1,'first');
                 if isempty(msgType_ndx) % if message type unknown
                     warning(['Unknown message type: num=', num2str(msgTypeNum),...
                              ' line=', num2str(lineNum)]);
@@ -211,10 +193,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
                 % Extract data according to table
                 msgLength = obj.(obj.fmt_name).Length(msgType_ndx);
-                readLength = msgLength - 3; % since header (2) and ID (1) bytes already read
-                msgData = uint8(fread(obj.fileID, [1 readLength], 'uint8', 0, 'l'));
-
-                if length(msgData) < readLength && feof(obj.fileID)
+                msgData = obj.readLogData(msgLength-length(obj.header)-1); % Don't count header or msgTypeNum bytes
+                
+                if isempty(msgData)
                     % Did not get a complete message. Discard incomplete portion and return
                     return
                 end
@@ -228,13 +209,48 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
             
         function [] = findMsgStart(obj)
-        % Read bytes from the file till the message-start character is found (dec=163,hex=A3)
-            b1 = fread(obj.fileID, 1, 'uint8', 0, 'l');
-            b2 = fread(obj.fileID, 1, 'uint8', 0, 'l');            
-            while (feof(obj.fileID)==0) && (b1 ~= obj.header1) && (b2 ~= obj.header2)
-                disp(['Warning: Trashing byte from log! hex=', dec2hex(b1,2),' dec=', b1,' char=',char(b1)])
-                b1 = b2; % move 2nd byte to 1st pos, old b1 is trashed
-                b2 = fread(obj.fileID, 1, 'uint8', 0, 'l'); % read new byte into b2
+        % Read bytes from the file till the message-start character is found (dec=163,hex=A3).
+        % (Leave read_ndx pointing BEFORE the header.)
+            
+            if all(obj.log_data((1:length(obj.header))+obj.log_data_read_ndx) == obj.header)
+                % Header is next set of bytes, don't trash anything, and continue
+            elseif (numel(obj.log_data) - obj.log_data_read_ndx) < length(obj.header)
+                % Log ends mid-header. No need to warn user, just read incomplete bit and exit silently
+                nbytes_remaining = length(obj.log_data)-obj.log_data_read_ndx;
+                trash_silent_bytes = obj.readLogData(nbytes_remaining);
+            else
+                % Header is NOT next 2 bytes... something went wrong.
+                disp(['Warning: something went wrong, either in the ' ...
+                      'log formation or the log processing.'])
+                disp(['Line# ', num2str(obj.lastLineNum), ' ended without a header beginning a new message'])
+                hdr_find = strfind(obj.log_data((obj.log_data_read_ndx+1):end), obj.header);
+                if isempty(hdr_find)
+                    disp('No more headers exist in log')
+                    % There are no more valid headers in the log, it is probably done
+                    % Trash rest of log and move read_ndx to end, signaling finish
+                    nbytes_remaining = length(obj.log_data)-obj.log_data_read_ndx;
+                    trash_bytes = obj.readLogData(nbytes_remaining);
+                else
+                    % Trash part of log and resume
+                    num_to_trash = hdr_find(1)-1;
+                    trash_bytes = obj.readLogData(num_to_trash);
+                end
+                disp('Trashing unrecognized/incomplete bytes from log! hex values are:')
+                disp(dec2hex(trash_bytes,2))
+                disp('Continuing with next message...')
+            end
+        end
+        
+        function data = readLogData(obj, nbytes)
+        % Safely read nbytes of data from obj.log_data, updating the log_data_read_ndx too
+            bytes_remaining = length(obj.log_data) - obj.log_data_read_ndx;
+            if bytes_remaining < nbytes
+                % Not enough log left, return empty and move read_ndx to end of log
+                data = [];
+                obj.log_data_read_ndx = obj.log_data_read_ndx + bytes_remaining;
+            else
+                data = obj.log_data(obj.log_data_read_ndx+(1:nbytes));
+                obj.log_data_read_ndx = obj.log_data_read_ndx + nbytes;
             end
         end
     end %methods
