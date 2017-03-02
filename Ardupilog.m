@@ -210,9 +210,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 trash_silent_bytes = obj.readLogData(nbytes_remaining);
             else
                 % Header is NOT next 2 bytes... something went wrong.
-                disp(['Warning: something went wrong, either in the ' ...
-                      'log formation or the log processing.'])
-                disp(['Line# ', num2str(obj.lastLineNum), ' ended without a header beginning a new message'])
+                warning(['something went wrong, either in the log '...
+                         'formation or the log processing. ' ...
+                         'Line# ', num2str(obj.lastLineNum), ' ended '...
+                         'without a header beginning a new message'])
                 hdr_find = strfind(obj.log_data((obj.log_data_read_ndx+1):end), obj.header);
                 if isempty(hdr_find)
                     disp('No more headers exist in log')
