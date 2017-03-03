@@ -176,8 +176,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
                 obj.fmt_type_mat = [obj.fmt_type_mat; newType];
 
-                % Need to keep msgName for storage below
-                msgName = newName;
+                % msgName needs to be FMT
+                fmt_ndx = find(obj.fmt_type_mat == 128);
+                msgName = obj.fmt_cell{fmt_ndx, 2};
             else % message is not FMT
                 % Look up msgTypeNum in known FMT.Type to get msgName
                 msgType_ndx = find(obj.fmt_type_mat==msgTypeNum, 1, 'first');
