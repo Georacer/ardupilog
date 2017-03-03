@@ -5,6 +5,7 @@
 %
 % This is hard-coded:
 % - The 128 (FMT) message must have fields "Name", "Type", and "Length" which specify other LogMsgGroups
+% - The FMT message data is 86 bytes long. (TODO HGM: un-hard-code this)
 
 classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     properties (Access = public)
@@ -18,11 +19,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     properties (Access = private)
         fileID = -1;
         lastLineNum = 0;
-        fmt_name = 'FMT'; % (Just in case this string is ever re-defined in a log)
         header = [163 149]; % Message header as defined in ArduPilot
         log_data = char(0); % The .bin file data as a row-matrix of chars (uint8's)
         log_data_read_ndx = 0; % The index of the last byte processed from the data
         wb_handle; % Handle to the waitbar, used to delete it in case of error
+        fmt_cell = cell(0); % a local copy of the FMT info, to reduce run-time
+        fmt_type_mat = []; % equivalent to cell2mat(obj.fmt_cell(:,1)), to reduce run-time
     end %properties
     methods
         function obj = Ardupilog(pathAndFileName)
@@ -49,6 +51,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Clear out the (temporary) properties
             obj.log_data = char(0);
             obj.log_data_read_ndx = 0;
+            obj.fmt_cell = cell(0);
+            obj.fmt_type_mat = [];
         end
         
         function delete(obj)
@@ -125,7 +129,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             disp(['Done processing ', num2str(obj.lastLineNum), ' lines.'])
         end
         
-        function [] = readLogLine(obj) % Reads a single log line
+        function [] = readLogLine(obj)
+        % Reads a single log line
             % Increment the (internal) log line number
             lineNum = obj.lastLineNum + 1;
 
@@ -153,8 +158,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     return
                 end
                 
-                newType = msgData(1);
-                newLen = msgData(2); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
+                newType = double(msgData(1));
+                newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
                 
                 newName = char(trimTail(msgData(3:6)));
                 newFmt = char(trimTail(msgData(7:22)));
@@ -167,20 +172,15 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 % Process FMT data
                 obj.(newName).storeFormat(newType, newLen, newFmt, newLabels);
                 
-                if (newType == 128)
-                    % Special case: first line is 128 (FMT) which defines 128 (FMT),
-                    %    so msgName can't be found in the FMT group yet. Use newName. 
-                    msgName = newName;
-                    obj.fmt_name = newName;
-                else
-                    % Usual case: find the msgName in the FMT LogMsgGroup
-                    msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum,1);                    
-                    msgName = trimTail(obj.(obj.fmt_name).Name(msgType_ndx,:));
-                end
-                
+                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
+                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
+
+                % Need to keep msgName for storage below
+                msgName = newName;
             else % message is not FMT
                 % Look up msgTypeNum in known FMT.Type to get msgName
-                msgType_ndx = find(obj.(obj.fmt_name).Type==msgTypeNum,1,'first');
+                msgType_ndx = find(obj.fmt_type_mat==msgTypeNum, 1, 'first');
                 if isempty(msgType_ndx) % if message type unknown
                     warning(['Unknown message type: num=', num2str(msgTypeNum),...
                              ' line=', num2str(lineNum)]);
@@ -188,11 +188,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     return
                 end
 
-                % Find msgName from FMT LogMsgGroup
-                msgName = trimTail(obj.(obj.fmt_name).Name(msgType_ndx,:));
-
-                % Extract data according to table
-                msgLength = obj.(obj.fmt_name).Length(msgType_ndx);
+                msgName = obj.fmt_cell{msgType_ndx,2};
+                msgLength = obj.fmt_cell{msgType_ndx,3};
                 msgData = obj.readLogData(msgLength-length(obj.header)-1); % Don't count header or msgTypeNum bytes
                 
                 if isempty(msgData)
@@ -258,7 +255,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 end %classdef Ardupilog
 
 function string = trimTail(string)
-    % Remove any trailing space (zero-chars)
+% Remove any trailing space (zero-chars)
     while string(end)==0
         string(end) = [];
     end
