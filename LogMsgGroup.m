@@ -21,6 +21,11 @@ classdef LogMsgGroup < dynamicprops
             obj.storeFormat(type_num, data_length, format_string, field_names_string);
         end
         
+        function [] = storeFormats(obj,FMTIndices)
+        % Read all the format messages and store them
+        numFMTS = length(FMTIndices)
+        end
+        
         function [] = storeFormat(obj, type_num, data_length, format_string, field_names_string)
             obj.fieldNameCell = strsplit(field_names_string,',');
             % For each of the fields
@@ -42,83 +47,90 @@ classdef LogMsgGroup < dynamicprops
             obj.format = format_string;
         end
 
-        function [] = storeMsg(obj, lineNo, msgData)
-            % Record the line number
-            obj.LineNo(end+1,:) = lineNo;
+        function [] = storeData(obj, data)
             % Format and store the msgData appropriately
+            columnIndex = 1;
             for field_ndx = 1:length(obj.fieldInfo)
                 % Find corresponding field name
                 field_name_string = obj.fieldNameCell{field_ndx};
-                
                 % select-and-format fieldData
                 switch obj.fieldInfo(field_ndx).Description
                   case 'b' % int8_t
                     fieldLen = 1;
-                    fieldData = double(typecast(msgData(1:fieldLen),'int8'));
+                    obj.(field_name_string) = double(typecast(data(:,columnIndex-1 +(1:fieldLen)),'int8'));
                   case 'B' % uint8_t
                     fieldLen = 1;
-                    fieldData = double(typecast(msgData(1:fieldLen),'uint8'));
+                    obj.(field_name_string) = double(typecast(data(:,columnIndex-1 +(1:fieldLen)),'uint8'));
                   case 'h' % int16_t
                     fieldLen = 2;
-                    fieldData = double(typecast(msgData(1:fieldLen),'int16'));
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'int16'),size(tempArray,1),1));
                   case 'H' % uint16_t
                     fieldLen = 2;
-                    fieldData = double(typecast(msgData(1:fieldLen),'uint16'));
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'uint16'),size(tempArray,1),1));
                   case 'i' % int32_t
                     fieldLen = 4;
-                    fieldData = double(typecast(msgData(1:fieldLen),'int32'));
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'int32'),size(tempArray,1),1));
                   case 'I' % uint32_t
                     fieldLen = 4;
-                    fieldData = double(typecast(msgData(1:fieldLen),'uint32'));
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'uint32'),size(tempArray,1),1));
                   case 'q' % int64_t
                     fieldLen = 8;
-                    fieldData = double(typecast(msgData(1:fieldLen),'int64'));
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'int64'),size(tempArray,1),1));
                   case 'Q' % uint64_t
                     fieldLen = 8;
-                    fieldData = double(typecast(msgData(1:fieldLen),'uint64'));
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'uint64'),size(tempArray,1),1));
                   case 'f' % float (32 bits)
                     fieldLen = 4;
-                    fieldData = double(typecast(msgData(1:fieldLen),'single'));
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'single'),size(tempArray,1),1));
                   case 'd' % double
                     fieldLen = 8;
-                    fieldData = double(typecast(msgData(1:fieldLen),'double'));                  
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'double'),size(tempArray,1),1));
                   case 'n' % char[4]
                     fieldLen = 4;
-                    fieldData = char(msgData(1:fieldLen));
+                    obj.(field_name_string) = char(data(:,columnIndex-1 +(1:fieldLen)));
                   case 'N' % char[16]
                     fieldLen = 16;
-                    fieldData = char(msgData(1:fieldLen));
+                    obj.(field_name_string) = char(data(:,columnIndex-1 +(1:fieldLen)));
                   case 'Z' % char[64]
                     fieldLen = 64;
-                    fieldData = char(msgData(1:fieldLen));
+                    obj.(field_name_string) = char(data(:,columnIndex-1 +(1:fieldLen)));
                   case 'c' % int16_t * 100
                     fieldLen = 2;
-                    fieldData = double(typecast(msgData(1:fieldLen),'int16'))/100;
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'int16'),size(tempArray,1),1))/100;
                   case 'C' % uint16_t * 100
                     fieldLen = 2;
-                    fieldData = double(typecast(msgData(1:fieldLen),'uint16'))/100;
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'uint16'),size(tempArray,1),1))/100;
                   case 'e' % int32_t * 100
                     fieldLen = 4;
-                    fieldData = double(typecast(msgData(1:fieldLen),'int32'))/100;
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'int32'),size(tempArray,1),1))/100;
                   case 'E' % uint32_t * 100
                     fieldLen = 4;
-                    fieldData = double(typecast(msgData(1:fieldLen),'uint32'))/100;
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'uint32'),size(tempArray,1),1))/100;
                   case 'L' % int32_t (Latitude/Longitude)
                     fieldLen = 4;
-                    fieldData = double(typecast(msgData(1:fieldLen),'int32'))/1e7;
+                    tempArray = data(:,columnIndex-1 +(1:fieldLen));
+                    obj.(field_name_string) = double(reshape(typecast(tempArray(:),'int32'),size(tempArray,1),1))/1e7;
                   case 'M' % uint8_t (Flight mode)
                     fieldLen = 1;
-                    fieldData = double(typecast(msgData(1:fieldLen),'uint8'));
+                    obj.(field_name_string) = double(typecast(data(:,columnIndex-1 +(1:fieldLen)),'uint8'));
                   otherwise
                     warning(['Unsupported format character: ',obj.fieldInfo(field_ndx).Description,...
                             ' --- Storing data as uint8 array.']);
                 end
-
-                % store fieldData into correct field
-                obj.(field_name_string) = [obj.(field_name_string); fieldData];
                 
-                % remove fieldData from (remaining) msgData
-                msgData(1:fieldLen) = [];
+                columnIndex = columnIndex + fieldLen;
             end
         end
     end
