@@ -99,11 +99,14 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Iterate over all the discovered msgs
             for i=1:length(obj.fmt_cell)
                 msgId = obj.fmt_cell{i,1};
+                if msgId==128 % Skip re-searching for FMT messages
+                    continue;
+                end
                 msgName = obj.fmt_cell{i,2};
                 msgLen = obj.fmt_cell{i,3};
                 MSGIndices = obj.discoverMSG(msgId,msgLen);
-                if isempty(MSGIndices)
-                    continue
+                if isempty(MSGIndices) % Skip storing non-appearing message types
+                    continue;
                 end
                 indices = reshape(ones(length(MSGIndices),1)*(3:(msgLen-1)) + (ones(length(MSGIndices),1).*MSGIndices')*ones(1,msgLen-3),[1 length(MSGIndices)*(msgLen-3)]);
                 data = reshape(obj.log_data(indices),[length(MSGIndices) (msgLen-3)]);
