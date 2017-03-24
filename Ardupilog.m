@@ -87,7 +87,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             
             % Discover the locations of all the messages
             FMTLength = 89;
-            FMTIndices = obj.discoverMSG(128,FMTLength);
+            allHeaderCandidates = obj.discoverHeaders([]);
+            FMTIndices = obj.discoverMSG(128,FMTLength,allHeaderCandidates);
             % Read the FMT message
             
             % Generate the N x msgLen array  which corresponds to the indicse where
@@ -110,7 +111,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
                 msgName = obj.fmt_cell{i,2};
                 msgLen = obj.fmt_cell{i,3};
-                MSGIndices = obj.discoverMSG(msgId,msgLen);
+                MSGIndices = obj.discoverMSG(msgId,msgLen,allHeaderCandidates);
                 if isempty(MSGIndices) % Skip storing non-appearing message types
                     continue;
                 end
@@ -169,25 +170,37 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             disp(['Done processing ', num2str(obj.lastLineNum), ' lines.'])
         end
         
-        function headerIndices = discoverMSG(obj,msgId,msgLen)
-            debug = true;
-%             debug = false;
-            if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
+        function headerIndices = discoverMSG(obj,msgId,msgLen,headerIndices)
             % Parses the whole log file and find the indices of all the msgs
             % Cross-references with the length of each message
+            debug = true;
+%             debug = false;
+
+            if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
             
-            % Locate all the candidate msgHeader positions
-            headerIndices = strfind(obj.log_data, [obj.header msgId]);
-            % Locate all the type fields
+            % Throw out any headers which don't leave room for a susbequent
+            % msgId byte
             logSize = length(obj.log_data);
-            overflow = find(headerIndices+msgLen-1>logSize,1,'first'); % Check if the message will not fit in the log
+            invalidMask = (headerIndices+2)>logSize;
+            headerIndices(invalidMask) = [];
+            
+            % Filter for the header indices which correspond to the
+            % requested msgId
+            validMask = obj.log_data(headerIndices+2)==msgId;
+            headerIndices(~validMask) = [];
+
+            % Check if the message can fit in the log
+            overflow = find(headerIndices+msgLen-1>logSize,1,'first'); 
             if ~isempty(overflow)
                 headerIndices(overflow:end) = [];
             end
-
-            % Verify that after each msgLen there is a new message
+            
+            % Verify that after each msg, another one exists. Otherwise,
+            % something is wrong
+            % First disregard messages which are at the end of the log
             b1_next_overflow = find((headerIndices+msgLen)>logSize); % Find where there can be no next b1
             b2_next_overflow = find((headerIndices+msgLen+1)>logSize); % Find where there can be no next b2
+            % Then search for the next header for the rest of the messages
             b1_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b1_next_overflow)) + msgLen);
             b2_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b2_next_overflow)) + msgLen + 1);
             b1_next_invalid = find(b1_next~=obj.header(1));
@@ -196,7 +209,15 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             invalid = unique([b1_next_invalid b2_next_invalid]);
             headerIndices(invalid) = [];
         end
-
+            
+        function headerIndices = discoverHeaders(obj,msgId)
+            % Find all candidate headers within the log data
+            % Not all Indices may correspond to actual messages
+            if nargin<2
+                msgId = [];
+            end
+            headerIndices = strfind(obj.log_data, [obj.header msgId]);
+        end
         
         function [] = createLogMsgGroups(obj,data)
             for i=1:size(data,1)
