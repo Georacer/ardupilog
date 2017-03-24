@@ -21,11 +21,6 @@ classdef LogMsgGroup < dynamicprops
             obj.storeFormat(type_num, data_length, format_string, field_names_string);
         end
         
-        function [] = storeFormats(obj,FMTIndices)
-        % Read all the format messages and store them
-        numFMTS = length(FMTIndices)
-        end
-        
         function [] = storeFormat(obj, type_num, data_length, format_string, field_names_string)
             obj.fieldNameCell = strsplit(field_names_string,',');
             % For each of the fields

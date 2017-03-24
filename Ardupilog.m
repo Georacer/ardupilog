@@ -152,6 +152,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
         
         function headerIndices = discoverMSG(obj,msgId,msgLen)
+            debug = true;
+%             debug = false;
+            if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
             % Parses the whole log file and find the indices of all the msgs
             % Cross-references with the length of each message
             
@@ -163,14 +166,16 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             if ~isempty(overflow)
                 headerIndices(overflow:end) = [];
             end
-            
+
             % Verify that after each msgLen there is a new message
-            b1 = obj.log_data(headerIndices + msgLen);
-            b2 = obj.log_data(headerIndices + msgLen + 1);
-            b1_invalid = find(b1~=obj.header(1));
-            b2_invalid = find(b2~=obj.header(2));
+            b1_next_overflow = find((headerIndices+msgLen)>logSize); % Find where there can be no next b1
+            b2_next_overflow = find((headerIndices+msgLen+1)>logSize); % Find where there can be no next b2
+            b1_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b1_next_overflow)) + msgLen);
+            b2_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b2_next_overflow)) + msgLen + 1);
+            b1_next_invalid = find(b1_next~=obj.header(1));
+            b2_next_invalid = find(b2_next~=obj.header(2));
             % Remove invalid message indices
-            invalid = unique([b1_invalid b2_invalid]);
+            invalid = unique([b1_next_invalid b2_next_invalid]);
             headerIndices(invalid) = [];
         end
 
