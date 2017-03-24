@@ -89,12 +89,18 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             FMTLength = 89;
             FMTIndices = obj.discoverMSG(128,FMTLength);
             % Read the FMT message
-            % Generate the index mask which corresponds to the places where
+            
+            % Generate the N x msgLen array  which corresponds to the indicse where
             % FMT information exists
-            indices = reshape(ones(length(FMTIndices),1)*(3:(FMTLength-1)) + (ones(length(FMTIndices),1).*FMTIndices')*ones(1,FMTLength-3),[1 length(FMTIndices)*(FMTLength-3)]);
-            % Get teh FMT data and reshape it into a Nx86 array
-            data = reshape(obj.log_data(indices),[length(FMTIndices) (FMTLength-3)]);
-            obj.createLogMsgGroups(data);
+            indexArray = ones(length(FMTIndices),1)*(3:(FMTLength-1)) + FMTIndices'*ones(1,FMTLength-3);
+            % Vectorize it into an 1 x N*msgLen vector
+            indexVector = reshape(indexArray',[1 length(FMTIndices)*(FMTLength-3)]);
+            % Get the FMT data as a vector
+            dataVector = obj.log_data(indexVector);
+            % and reshape it into a 86xN array - CAUTION: reshaping vector
+            % to array builds the array column-wise!!!
+            data = reshape(dataVector,[(FMTLength-3) length(FMTIndices)] );
+            obj.createLogMsgGroups(data');
             
             % Iterate over all the discovered msgs
             for i=1:length(obj.fmt_cell)
@@ -108,9 +114,18 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 if isempty(MSGIndices) % Skip storing non-appearing message types
                     continue;
                 end
-                indices = reshape(ones(length(MSGIndices),1)*(3:(msgLen-1)) + (ones(length(MSGIndices),1).*MSGIndices')*ones(1,msgLen-3),[1 length(MSGIndices)*(msgLen-3)]);
-                data = reshape(obj.log_data(indices),[length(MSGIndices) (msgLen-3)]);
-                obj.(msgName).storeData(data);
+
+                % Generate the N x msgLen array  which corresponds to the indicse where
+                % FMT information exists
+                indexArray = ones(length(MSGIndices),1)*(3:(msgLen-1)) + MSGIndices'*ones(1,msgLen-3);
+                % Vectorize it into an 1 x N*msgLen vector
+                indexVector = reshape(indexArray',[1 length(MSGIndices)*(msgLen-3)]);
+                % Get the FMT data as a vector
+                dataVector = obj.log_data(indexVector);
+                % and reshape it into a msgLen x N array - CAUTION: reshaping vector
+                % to array builds the array column-wise!!!
+                data = reshape(dataVector,[(msgLen-3) length(MSGIndices)] );
+                obj.(msgName).storeData(data');
             end
             
 %             % Prompt user to choose how many messages to process, and setup GUI waitbar
