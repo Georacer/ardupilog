@@ -26,6 +26,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         fmt_cell = cell(0); % a local copy of the FMT info, to reduce run-time
         fmt_type_mat = []; % equivalent to cell2mat(obj.fmt_cell(:,1)), to reduce run-time
     end %properties
+    
     methods
         function obj = Ardupilog(pathAndFileName)
             if nargin == 0
@@ -83,50 +84,170 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             else
                 warn('File not closed successfully')
             end
-
-            % The number of header occurances is a good estimate at the number of messages
-            % -- (If the header occurs "accidentally" in the data, this count will be wrong)
-            obj.numMsgs = length(strfind(obj.log_data, obj.header));
             
-            % Prompt user to choose how many messages to process, and setup GUI waitbar
-            num_lines = input(sprintf('How many log lines to process? (%d total, press Enter to process all): ', obj.numMsgs));
-            waitbar_max_lines = num_lines;
-            if isempty(num_lines)
-                num_lines = obj.numMsgs*10; % numMsgs should be accurate, the *10 is "just in case"...
-                waitbar_max_lines = obj.numMsgs;
-            end
-            obj.wb_handle = waitbar(0, 'Initializing...', ...
-                         'Name', ['Processing log: ', obj.fileName], ...
-                         'CreateCancelBtn', 'setappdata(gcbf, ''cancel_pressed'', 1)');
-            setappdata(obj.wb_handle,'cancel_pressed',0);
-
-            % Process messages one by one, either creating formats, moving to seen, or appending seen
-            for ctr = 1:num_lines % HGM: Consider replacing for-loop with while loop?
-                % If another log line exists, process it
-                if obj.log_data_read_ndx < numel(obj.log_data);
-                    % Check to see if user pressed cancel button
-                    if getappdata(obj.wb_handle, 'cancel_pressed') == 1
-                        disp('Canceled by user')
-                        break
-                    end
-                    % The main call to process a single log line
-                    obj.readLogLine();
-                else % at end of file
-                    disp('Reached end of log.')
-                    obj.numMsgs = obj.lastLineNum;
-                    break
+            % Discover the locations of all the messages
+            FMTLength = 89;
+            allHeaderCandidates = obj.discoverHeaders([]);
+            FMTIndices = obj.discoverMSG(128,FMTLength,allHeaderCandidates);
+            % Read the FMT message
+            
+            % Generate the N x msgLen array  which corresponds to the indicse where
+            % FMT information exists
+            indexArray = ones(length(FMTIndices),1)*(3:(FMTLength-1)) + FMTIndices'*ones(1,FMTLength-3);
+            % Vectorize it into an 1 x N*msgLen vector
+            indexVector = reshape(indexArray',[1 length(FMTIndices)*(FMTLength-3)]);
+            % Get the FMT data as a vector
+            dataVector = obj.log_data(indexVector);
+            % and reshape it into a 86xN array - CAUTION: reshaping vector
+            % to array builds the array column-wise!!!
+            data = reshape(dataVector,[(FMTLength-3) length(FMTIndices)] );
+            obj.createLogMsgGroups(data');
+            
+            % Iterate over all the discovered msgs
+            for i=1:length(obj.fmt_cell)
+                msgId = obj.fmt_cell{i,1};
+                if msgId==128 % Skip re-searching for FMT messages
+                    continue;
+                end
+                msgName = obj.fmt_cell{i,2};
+                msgLen = obj.fmt_cell{i,3};
+                MSGIndices = obj.discoverMSG(msgId,msgLen,allHeaderCandidates);
+                if isempty(MSGIndices) % Skip storing non-appearing message types
+                    continue;
                 end
 
-                % Display progress for user
-                if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
-                    waitbar(ctr/waitbar_max_lines, obj.wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
-                end
+                % Generate the N x msgLen array  which corresponds to the indicse where
+                % FMT information exists
+                indexArray = ones(length(MSGIndices),1)*(3:(msgLen-1)) + MSGIndices'*ones(1,msgLen-3);
+                % Vectorize it into an 1 x N*msgLen vector
+                indexVector = reshape(indexArray',[1 length(MSGIndices)*(msgLen-3)]);
+                % Get the FMT data as a vector
+                dataVector = obj.log_data(indexVector);
+                % and reshape it into a msgLen x N array - CAUTION: reshaping vector
+                % to array builds the array column-wise!!!
+                data = reshape(dataVector,[(msgLen-3) length(MSGIndices)] );
+                obj.(msgName).storeData(data');
             end
-
-            delete(obj.wb_handle);
+            
+%             % Prompt user to choose how many messages to process, and setup GUI waitbar
+%             num_lines = input(sprintf('How many log lines to process? (%d total, press Enter to process all): ', obj.numMsgs));
+%             waitbar_max_lines = num_lines;
+%             if isempty(num_lines)
+%                 num_lines = obj.numMsgs*10; % numMsgs should be accurate, the *10 is "just in case"...
+%                 waitbar_max_lines = obj.numMsgs;
+%             end
+%             obj.wb_handle = waitbar(0, 'Initializing...', ...
+%                          'Name', ['Processing log: ', obj.fileName], ...
+%                          'CreateCancelBtn', 'setappdata(gcbf, ''cancel_pressed'', 1)');
+%             setappdata(obj.wb_handle,'cancel_pressed',0);
+% 
+%             % Process messages one by one, either creating formats, moving to seen, or appending seen
+%             for ctr = 1:num_lines % HGM: Consider replacing for-loop with while loop?
+%                 % If another log line exists, process it
+%                 if obj.log_data_read_ndx < numel(obj.log_data);
+%                     % Check to see if user pressed cancel button
+%                     if getappdata(obj.wb_handle, 'cancel_pressed') == 1
+%                         disp('Canceled by user')
+%                         break
+%                     end
+%                     % The main call to process a single log line
+%                     obj.readLogLine();
+%                 else % at end of file
+%                     disp('Reached end of log.')
+%                     obj.numMsgs = obj.lastLineNum;
+%                     break
+%                 end
+% 
+%                 % Display progress for user
+%                 if mod(obj.lastLineNum, 1000) == 0 % every 1e3 messages
+%                     waitbar(ctr/waitbar_max_lines, obj.wb_handle, sprintf('%d of %d', obj.lastLineNum, waitbar_max_lines));
+%                 end
+%             end
+% 
+%             delete(obj.wb_handle);
             
             % Display message on completion
             disp(['Done processing ', num2str(obj.lastLineNum), ' lines.'])
+        end
+        
+        function headerIndices = discoverMSG(obj,msgId,msgLen,headerIndices)
+            % Parses the whole log file and find the indices of all the msgs
+            % Cross-references with the length of each message
+            debug = true;
+%             debug = false;
+
+            if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
+            
+            % Throw out any headers which don't leave room for a susbequent
+            % msgId byte
+            logSize = length(obj.log_data);
+            invalidMask = (headerIndices+2)>logSize;
+            headerIndices(invalidMask) = [];
+            
+            % Filter for the header indices which correspond to the
+            % requested msgId
+            validMask = obj.log_data(headerIndices+2)==msgId;
+            headerIndices(~validMask) = [];
+
+            % Check if the message can fit in the log
+            overflow = find(headerIndices+msgLen-1>logSize,1,'first'); 
+            if ~isempty(overflow)
+                headerIndices(overflow:end) = [];
+            end
+            
+            % Verify that after each msg, another one exists. Otherwise,
+            % something is wrong
+            % First disregard messages which are at the end of the log
+            b1_next_overflow = find((headerIndices+msgLen)>logSize); % Find where there can be no next b1
+            b2_next_overflow = find((headerIndices+msgLen+1)>logSize); % Find where there can be no next b2
+            % Then search for the next header for the rest of the messages
+            b1_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b1_next_overflow)) + msgLen);
+            b2_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b2_next_overflow)) + msgLen + 1);
+            b1_next_invalid = find(b1_next~=obj.header(1));
+            b2_next_invalid = find(b2_next~=obj.header(2));
+            % Remove invalid message indices
+            invalid = unique([b1_next_invalid b2_next_invalid]);
+            headerIndices(invalid) = [];
+        end
+            
+        function headerIndices = discoverHeaders(obj,msgId)
+            % Find all candidate headers within the log data
+            % Not all Indices may correspond to actual messages
+            if nargin<2
+                msgId = [];
+            end
+            headerIndices = strfind(obj.log_data, [obj.header msgId]);
+        end
+        
+        function [] = createLogMsgGroups(obj,data)
+            for i=1:size(data,1)
+                % Process FMT message to create a new dynamic property
+                msgData = data(i,:);
+                
+                newType = double(msgData(1));
+                newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
+                
+                newName = char(trimTail(msgData(3:6)));
+                newFmt = char(trimTail(msgData(7:22)));
+                newLabels = char(trimTail(msgData(23:86)));
+                
+                % Create dynamic property of Ardupilog with newName
+                addprop(obj, newName);
+                % Instantiate LogMsgGroup class named newName
+                obj.(newName) = LogMsgGroup();
+                % Process FMT data
+                obj.(newName).storeFormat(newType, newLen, newFmt, newLabels);
+                
+                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
+                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
+                
+            end
+            % msgName needs to be FMT
+            fmt_ndx = find(obj.fmt_type_mat == 128);
+            FMTName = obj.fmt_cell{fmt_ndx, 2};
+            % Store msgData correctly in that LogMsgGroup
+            obj.(FMTName).storeData(data);
         end
         
         function [] = readLogLine(obj)
@@ -240,16 +361,14 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
         end
         
-        function data = readLogData(obj, nbytes)
+        function data = readLogData(obj, index, nbytes)
         % Safely read nbytes of data from obj.log_data, updating the log_data_read_ndx too
-            bytes_remaining = length(obj.log_data) - obj.log_data_read_ndx;
+            bytes_remaining = length(obj.log_data) - index;
             if bytes_remaining < nbytes
                 % Not enough log left, return empty and move read_ndx to end of log
                 data = [];
-                obj.log_data_read_ndx = obj.log_data_read_ndx + bytes_remaining;
             else
-                data = obj.log_data(obj.log_data_read_ndx+(1:nbytes));
-                obj.log_data_read_ndx = obj.log_data_read_ndx + nbytes;
+                data = obj.log_data((index-1)+(1:nbytes));
             end
         end
     end %methods
