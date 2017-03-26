@@ -88,19 +88,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Discover the locations of all the messages
             FMTLength = 89;
             allHeaderCandidates = obj.discoverHeaders([]);
-            FMTIndices = obj.discoverMSG(128,FMTLength,allHeaderCandidates);
-            % Read the FMT message
             
-            % Generate the N x msgLen array  which corresponds to the indicse where
-            % FMT information exists
-            indexArray = ones(length(FMTIndices),1)*(3:(FMTLength-1)) + FMTIndices'*ones(1,FMTLength-3);
-            % Vectorize it into an 1 x N*msgLen vector
-            indexVector = reshape(indexArray',[1 length(FMTIndices)*(FMTLength-3)]);
-            % Get the FMT data as a vector
-            dataVector = obj.log_data(indexVector);
-            % and reshape it into a 86xN array - CAUTION: reshaping vector
-            % to array builds the array column-wise!!!
-            data = reshape(dataVector,[(FMTLength-3) length(FMTIndices)] );
+            % Read the FMT message
+            data = obj.isolateMsgData(128,FMTLength,allHeaderCandidates);
             obj.createLogMsgGroups(data');
             
             % Iterate over all the discovered msgs
@@ -111,21 +101,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
                 msgName = obj.fmt_cell{i,2};
                 msgLen = obj.fmt_cell{i,3};
-                MSGIndices = obj.discoverMSG(msgId,msgLen,allHeaderCandidates);
-                if isempty(MSGIndices) % Skip storing non-appearing message types
-                    continue;
-                end
-
-                % Generate the N x msgLen array  which corresponds to the indicse where
-                % FMT information exists
-                indexArray = ones(length(MSGIndices),1)*(3:(msgLen-1)) + MSGIndices'*ones(1,msgLen-3);
-                % Vectorize it into an 1 x N*msgLen vector
-                indexVector = reshape(indexArray',[1 length(MSGIndices)*(msgLen-3)]);
-                % Get the FMT data as a vector
-                dataVector = obj.log_data(indexVector);
-                % and reshape it into a msgLen x N array - CAUTION: reshaping vector
-                % to array builds the array column-wise!!!
-                data = reshape(dataVector,[(msgLen-3) length(MSGIndices)] );
+                data = obj.isolateMsgData(msgId,msgLen,allHeaderCandidates);
                 obj.(msgName).storeData(data');
             end
             
@@ -180,6 +156,23 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 msgId = [];
             end
             headerIndices = strfind(obj.log_data, [obj.header msgId]);
+        end
+
+        function data = isolateMsgData(obj,msgId,msgLen,allHeaderCandidates)
+            % Return an msgLen x N array of msgs entries with msgId
+            
+            msgIndices = obj.discoverMSG(msgId,msgLen,allHeaderCandidates);
+            
+            % Generate the N x msgLen array  which corresponds to the indicse where
+            % FMT information exists
+            indexArray = ones(length(msgIndices),1)*(3:(msgLen-1)) + msgIndices'*ones(1,msgLen-3);
+            % Vectorize it into an 1 x N*msgLen vector
+            indexVector = reshape(indexArray',[1 length(msgIndices)*(msgLen-3)]);
+            % Get the FMT data as a vector
+            dataVector = obj.log_data(indexVector);
+            % and reshape it into a msgLen x N array - CAUTION: reshaping vector
+            % to array builds the array column-wise!!!
+            data = reshape(dataVector,[(msgLen-3) length(msgIndices)] );
         end
         
         function [] = createLogMsgGroups(obj,data)
