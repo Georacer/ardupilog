@@ -1,12 +1,3 @@
-% HGM:
-% - Does endian-ness matter? How to make robust?
-% - Consider non-doubles for efficiency/speed/memory
-% - What's the difference between the "length" of a message as provided by FMT, vs the sum of the lengths of the field identifiers? (BQNnz, for example)
-%
-% This is hard-coded:
-% - The 128 (FMT) message must have fields "Name", "Type", and "Length" which specify other LogMsgGroups
-% - The FMT message data is 86 bytes long. (TODO HGM: un-hard-code this)
-
 classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     properties (Access = public)
         fileName % name of .bin file
@@ -25,6 +16,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         wb_handle; % Handle to the waitbar, used to delete it in case of error
         fmt_cell = cell(0); % a local copy of the FMT info, to reduce run-time
         fmt_type_mat = []; % equivalent to cell2mat(obj.fmt_cell(:,1)), to reduce run-time
+        FMTID = 128;
     end %properties
     
     methods
@@ -90,13 +82,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             allHeaderCandidates = obj.discoverHeaders([]);
             
             % Read the FMT message
-            data = obj.isolateMsgData(128,FMTLength,allHeaderCandidates);
+            data = obj.isolateMsgData(obj.FMTID,FMTLength,allHeaderCandidates);
             obj.createLogMsgGroups(data');
             
             % Iterate over all the discovered msgs
             for i=1:length(obj.fmt_cell)
                 msgId = obj.fmt_cell{i,1};
-                if msgId==128 % Skip re-searching for FMT messages
+                if msgId==obj.FMTID % Skip re-searching for FMT messages
                     continue;
                 end
                 msgName = obj.fmt_cell{i,2};
