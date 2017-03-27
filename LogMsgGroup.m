@@ -1,27 +1,28 @@
 classdef LogMsgGroup < dynamicprops
     properties (Access = private)
-        type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
         data_len = 0; % Len of data portion for this message (neglecting 2-byte header + 1-byte ID)
         format = ''; % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
         fieldInfo = []; % Array of meta.DynamicProperty items
         fieldNameCell = {}; % Cell-array of field names, to reduce run-time
     end
     properties (Access = public)
+        type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
+        name = ''; % Human readable name of msg group
         % TimeRel % array of boot-relative time values
         % Timestamp % array of time values
         LineNo = [];
     end
     
     methods
-        function obj = LogMsgGroup(type_num, data_length, format_string, field_names_string)
+        function obj = LogMsgGroup(type_num, type_name, data_length, format_string, field_names_string)
             if nargin == 0
                 % This is an empty constructor, MATLAB requires it to exist
                 return
             end
-            obj.storeFormat(type_num, data_length, format_string, field_names_string);
+            obj.storeFormat(type_num, type_name, data_length, format_string, field_names_string);
         end
         
-        function [] = storeFormat(obj, type_num, data_length, format_string, field_names_string)
+        function [] = storeFormat(obj, type_num, type_name, data_length, format_string, field_names_string)
             obj.fieldNameCell = strsplit(field_names_string,',');
             % For each of the fields
             for ndx = 1:length(obj.fieldNameCell)
@@ -38,6 +39,7 @@ classdef LogMsgGroup < dynamicprops
 
             % Save FMT data into private properties (Not actually used anywhere?)
             obj.type = type_num;
+            obj.name = type_name;
             obj.data_len = data_length;
             obj.format = format_string;
         end
