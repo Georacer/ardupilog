@@ -17,10 +17,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         fmt_cell = cell(0); % a local copy of the FMT info, to reduce run-time
         fmt_type_mat = []; % equivalent to cell2mat(obj.fmt_cell(:,1)), to reduce run-time
         FMTID = 128;
+        FMTLen = 89;
+        msgFilter % Storage for the msgIds/msgNames desired for parsing
     end %properties
     
     methods
-        function obj = Ardupilog(pathAndFileName)
+        function obj = Ardupilog(pathAndFileName,msgFilter)
             if nargin == 0
                 % If constructor is empty, prompt user for log file
                 [filename, filepathname, ~] = uigetfile('*.bin','Select binary (.bin) log-file');
@@ -31,6 +33,23 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 [filepathname, filename, extension] = fileparts(which(pathAndFileName));
                 obj.filePathName = filepathname;
                 obj.fileName = [filename, extension];
+            end
+            
+            % Check for the existence of message filters
+            if nargin<2 % msgFilter argument not given
+                obj.msgFilter = [];
+            else
+                if ~isempty(msgFilter)
+                    if iscellstr(msgFilter) % msgFilter is cell of strings (msgNames)
+                        obj.msgFilter = msgFilter;
+                    elseif isnumeric(msgFilter) % msgFilter is numeric array (msgIDs)
+                        obj.msgFilter = msgFilter;
+                    else
+                        error('msgFilter input argument invalid. Cell of strings or array accepted');
+                    end
+                else % msgFilter argument given and empty
+                    obj.msgFilter = [];
+                end
             end
 
             % If user pressed "cancel" then return without trying to process
@@ -78,20 +97,50 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
             
             % Discover the locations of all the messages
-            FMTLength = 89;
             allHeaderCandidates = obj.discoverHeaders([]);
             
             % Read the FMT message
-            data = obj.isolateMsgData(obj.FMTID,FMTLength,allHeaderCandidates);
+            data = obj.isolateMsgData(obj.FMTID,obj.FMTLen,allHeaderCandidates);
             obj.createLogMsgGroups(data');
+            
+            % Check for validity of the input msgFilter
+            if ~isempty(obj.msgFilter)
+                if iscellstr(obj.msgFilter);
+                    invalid = find(ismember(obj.msgFilter,obj.fmt_cell(:,2))==0);
+                    for i=1:length(invalid)
+                        warning('Invalid element in provided message filter: %s',obj.msgFilter{invalid(i)});
+                    end
+                else
+                    invalid = find(ismember(obj.msgFilter,cell2mat(obj.fmt_cell(:,1)))==0);
+                    for i=1:length(invalid)
+                        warning('Invalid element in provided message filter: %d',obj.msgFilter(invalid(i)));
+                    end                    
+                end
+            end
             
             % Iterate over all the discovered msgs
             for i=1:length(obj.fmt_cell)
                 msgId = obj.fmt_cell{i,1};
+                msgName = obj.fmt_cell{i,2};
                 if msgId==obj.FMTID % Skip re-searching for FMT messages
                     continue;
                 end
-                msgName = obj.fmt_cell{i,2};
+
+                % Check against the message filters
+                if ~isempty(obj.msgFilter) 
+                    if iscellstr(obj.msgFilter)
+                        if ~ismember(msgName,obj.msgFilter)
+                            continue;
+                        end
+                    elseif isnumeric(obj.msgFilter)
+                        if ~ismember(msgId,obj.msgFilter);
+                            continue;
+                        end
+                    else
+                        error('Unexpected comparison result');
+                    end
+                end
+
                 msgLen = obj.fmt_cell{i,3};
                 data = obj.isolateMsgData(msgId,msgLen,allHeaderCandidates);
                 obj.(msgName).storeData(data');
