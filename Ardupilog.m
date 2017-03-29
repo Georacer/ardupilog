@@ -2,8 +2,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     properties (Access = public)
         fileName % name of .bin file
         filePathName % path to .bin file
-        % platform
-        % version
+        platform % ArduPlane, ArduCopter etc
+        version % Firmware version
+        commit % Specific git commit
         % bootTime
         numMsgs
     end
@@ -59,6 +60,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             
             % THE MAIN CALL: Begin reading specified log file
             readLog(obj);
+            
+            % Extract firmware version from MSG fields
+            obj.findInfo();
             
             % Clear out the (temporary) properties
             obj.log_data = char(0);
@@ -245,6 +249,23 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             FMTName = obj.fmt_cell{fmt_ndx, 2};
             % Store msgData correctly in that LogMsgGroup
             obj.(FMTName).storeData(data);
+        end
+        
+        function [] = findInfo(obj)
+            % Extract vehicle firmware info
+                        
+            if isprop(obj,'MSG')
+                for type = {'ArduPlane','ArduCopter','ArduRover','ArduSub'}
+                    info_row = strmatch(type{:},obj.MSG.Message);
+                    if ~isempty(info_row)
+                        obj.platform = type{:};
+                        fields_cell = strsplit(obj.MSG.Message(info_row,:));
+                        obj.version = fields_cell{1,2};
+                        commit = trimTail(fields_cell{1,3});
+                        obj.commit = commit(2:(end-1));
+                    end
+                end
+            end
         end
 
     end %methods
