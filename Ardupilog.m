@@ -81,7 +81,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
         
         function [] = readLog(obj)
-        % Open file, read all data, count number of headers = number of messages, process data, close file
+        % Open file, read all data, close file,
+        % Find message headers, find FMT messages, create LogMsgGroup for each FMT msg,
+        % Count number of headers = number of messages, process data
 
             % Open a file at [filePathName filesep fileName]
             [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName], 'r');
@@ -154,7 +156,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             disp('Done processing.');
         end
         
-        function headerIndices = discoverMSG(obj,msgId,msgLen,headerIndices)
+        function headerIndices = discoverValidMsgHeaders(obj,msgId,msgLen,headerIndices)
             % Parses the whole log file and find the indices of all the msgs
             % Cross-references with the length of each message
                 
@@ -205,12 +207,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
 
         function data = isolateMsgData(obj,msgId,msgLen,allHeaderCandidates)
-            % Return an msgLen x N array of msgs entries with msgId
-            
-            msgIndices = obj.discoverMSG(msgId,msgLen,allHeaderCandidates);
-            
-            % Generate the N x msgLen array  which corresponds to the indicse where
-            % FMT information exists
+        % Return an msgLen x N array of valid msg data corresponding to msgId
+
+            % Remove invalid header candidates
+            msgIndices = obj.discoverValidMsgHeaders(msgId,msgLen,allHeaderCandidates);
+            % Generate the N x msgLen array which corresponds to the indices where FMT information exists
             indexArray = ones(length(msgIndices),1)*(3:(msgLen-1)) + msgIndices'*ones(1,msgLen-3);
             % Vectorize it into an 1 x N*msgLen vector
             indexVector = reshape(indexArray',[1 length(msgIndices)*(msgLen-3)]);
