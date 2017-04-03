@@ -134,6 +134,10 @@ classdef LogMsgGroup < dynamicprops
             end
         end
         
+        function [] = setLineNo(obj, LineNo)
+            obj.LineNo = LineNo;
+        end
+        
         function [] = verifyTypeLengths(obj)
             length = 0;
             for varType = obj.format

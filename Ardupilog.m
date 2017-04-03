@@ -20,6 +20,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTID = 128;
         FMTLen = 89;
         msgFilter % Storage for the msgIds/msgNames desired for parsing
+        valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
     end %properties
     
     methods
@@ -132,6 +133,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     continue;
                 end
 
+                msgLen = obj.fmt_cell{i,3};
+                data = obj.isolateMsgData(msgId,msgLen,allHeaderCandidates);
+
                 % Check against the message filters
                 if ~isempty(obj.msgFilter) 
                     if iscellstr(obj.msgFilter)
@@ -146,12 +150,28 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                         error('Unexpected comparison result');
                     end
                 end
-
-                msgLen = obj.fmt_cell{i,3};
-                data = obj.isolateMsgData(msgId,msgLen,allHeaderCandidates);
+                
+                % If message not filtered, store it
                 obj.(msgName).storeData(data');
             end
             
+            % Construct the LineNo for the whole log
+            LineNo_ndx_vec = sort(vertcat(obj.valid_msgheader_cell{:,2}));
+            LineNo_vec = [1:length(LineNo_ndx_vec)]';
+            % For each LogMsgGroup which wasn't filtered
+            for i = 1:size(obj.valid_msgheader_cell,1)
+                % Find msgName from msgId in 1st column
+                msgId = obj.valid_msgheader_cell{i,1};
+                row_in_fmt_cell = vertcat(obj.fmt_cell{:,1})==msgId;
+                msgName = obj.fmt_cell{row_in_fmt_cell,2};
+
+                % Pick out the correct line numbers
+                msg_LineNo = LineNo_vec(ismember(LineNo_ndx_vec, obj.valid_msgheader_cell{i,2}));
+                
+                % Write to the LogMsgGroup
+                obj.(msgName).setLineNo(msg_LineNo);
+            end
+
             % Display message on completion
             disp('Done processing.');
         end
@@ -211,6 +231,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
             % Remove invalid header candidates
             msgIndices = obj.discoverValidMsgHeaders(msgId,msgLen,allHeaderCandidates);
+            % Save valid headers for reconstructing the log LineNo
+            obj.valid_msgheader_cell{end+1, 1} = msgId;
+            obj.valid_msgheader_cell{end, 2} = msgIndices';
+            
             % Generate the N x msgLen array which corresponds to the indices where FMT information exists
             indexArray = ones(length(msgIndices),1)*(3:(msgLen-1)) + msgIndices'*ones(1,msgLen-3);
             % Vectorize it into an 1 x N*msgLen vector
