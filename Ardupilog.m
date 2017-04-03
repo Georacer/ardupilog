@@ -157,8 +157,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         function headerIndices = discoverMSG(obj,msgId,msgLen,headerIndices)
             % Parses the whole log file and find the indices of all the msgs
             % Cross-references with the length of each message
-            debug = true;
-%             debug = false;
+                
+            %debug = true;
+            debug = false;
 
             if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
             
@@ -234,11 +235,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 
                 % Create dynamic property of Ardupilog with newName
                 addprop(obj, newName);
-                % Instantiate LogMsgGroup class named newName
-                obj.(newName) = LogMsgGroup();
-                % Process FMT data
-                obj.(newName).storeFormat(newType, newName, newLen, newFmt, newLabels);
-                
+                % Instantiate LogMsgGroup class named newName, process FMT data
+                obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
+               
                 % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
                 obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
                 obj.fmt_type_mat = [obj.fmt_type_mat; newType];
