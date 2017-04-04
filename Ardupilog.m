@@ -6,7 +6,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         version % Firmware version
         commit % Specific git commit
         % bootTime
-        numMsgs
+        numMsgs = 0;
     end
     properties (Access = private)
         fileID = -1;
@@ -103,7 +103,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Discover the locations of all the messages
             allHeaderCandidates = obj.discoverHeaders([]);
             
-            % Read the FMT message
+            % Find the FMT message legnth
+            obj.findFMTLength(allHeaderCandidates);
+            
+            % Read the FMT messages
             data = obj.isolateMsgData(obj.FMTID,obj.FMTLen,allHeaderCandidates);
             obj.createLogMsgGroups(data');
             
@@ -266,6 +269,21 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     end
                 end
             end
+        end
+        
+        function [] = findFMTLength(obj,allHeaderCandidates)
+            for index = allHeaderCandidates
+            % Try to find the length of the format message
+                msgId = obj.log_data(index+2); % Get the next expected msgId
+                if obj.log_data(index+3)==obj.FMTID % Check if this is the definition of the FMT message
+                    if msgId == obj.FMTID % Check if it matches the FMT message
+                        obj.FMTLen = double(obj.log_data(index+4));
+                        return; % Return as soon as the FMT length is found
+                    end
+                end
+            end
+            warning('Could not find the FMT message to extract its length. Leaving the default %d',obj.FMTLen);
+            return;
         end
 
     end %methods
