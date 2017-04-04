@@ -5,7 +5,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         platform % ArduPlane, ArduCopter etc
         version % Firmware version
         commit % Specific git commit
+        totalLogMsgs = 0;
         % bootTime
+        msgFilter = []; % Storage for the msgIds/msgNames desired for parsing
         numMsgs = 0;
     end
     properties (Access = private)
@@ -16,7 +18,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         fmt_type_mat = []; % equivalent to cell2mat(obj.fmt_cell(:,1)), to reduce run-time
         FMTID = 128;
         FMTLen = 89;
-        msgFilter % Storage for the msgIds/msgNames desired for parsing
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
     end %properties
     
@@ -35,9 +36,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
             
             % Check for the existence of message filters
-            if nargin<2 % msgFilter argument not given
-                obj.msgFilter = [];
-            else
+            if nargin>=2 % msgFilter argument given
                 if ~isempty(msgFilter)
                     if iscellstr(msgFilter) % msgFilter is cell of strings (msgNames)
                         obj.msgFilter = msgFilter;
@@ -46,8 +45,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     else
                         error('msgFilter input argument invalid. Cell of strings or array accepted');
                     end
-                else % msgFilter argument given and empty
-                    obj.msgFilter = [];
                 end
             end
 
@@ -110,12 +107,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             
             % Check for validity of the input msgFilter
             if ~isempty(obj.msgFilter)
-                if iscellstr(obj.msgFilter);
+                if iscellstr(obj.msgFilter) %obj.msgFilter is a cell-array of strings
                     invalid = find(ismember(obj.msgFilter,obj.fmt_cell(:,2))==0);
                     for i=1:length(invalid)
                         warning('Invalid element in provided message filter: %s',obj.msgFilter{invalid(i)});
                     end
-                else
+                else %msgFilter is an array of msgId's
                     invalid = find(ismember(obj.msgFilter,cell2mat(obj.fmt_cell(:,1)))==0);
                     for i=1:length(invalid)
                         warning('Invalid element in provided message filter: %d',obj.msgFilter(invalid(i)));
@@ -151,11 +148,15 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 
                 % If message not filtered, store it
                 obj.(msgName).storeData(data');
+                % Add to number of msgs in Ardupilog
+                obj.numMsgs = obj.numMsgs + size(data, 2);
             end
             
             % Construct the LineNo for the whole log
             LineNo_ndx_vec = sort(vertcat(obj.valid_msgheader_cell{:,2}));
             LineNo_vec = [1:length(LineNo_ndx_vec)]';
+            % Record the total number of log messages
+            obj.totalLogMsgs = LineNo_vec(end);
             % For each LogMsgGroup which wasn't filtered
             for i = 1:size(obj.valid_msgheader_cell,1)
                 % Find msgName from msgId in 1st column
@@ -271,6 +272,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             FMTName = obj.fmt_cell{fmt_ndx, 2};
             % Store msgData correctly in that LogMsgGroup
             obj.(FMTName).storeData(data);
+            % Add to number of msgs in Ardupilog
+            obj.numMsgs = obj.numMsgs + size(data, 1);
         end
         
         function [] = findInfo(obj)
