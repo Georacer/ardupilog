@@ -9,18 +9,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         numMsgs = 0;
     end
     properties (Access = private)
-        fileID = -1;
-        lastLineNum = 0;
         header = [163 149]; % Message header as defined in ArduPilot
-        log_data = char(0); % The .bin file data as a row-matrix of chars (uint8's)
-        log_data_read_ndx = 0; % The index of the last byte processed from the data
-        wb_handle; % Handle to the waitbar, used to delete it in case of error
-        fmt_cell = cell(0); % a local copy of the FMT info, to reduce run-time
-        fmt_type_mat = []; % equivalent to cell2mat(obj.fmt_cell(:,1)), to reduce run-time
         FMTID = 128;
         FMTLen = 89;
         msgFilter % Storage for the msgIds/msgNames desired for parsing
-        valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
+
+        % This property holds temporary info, to be deleted after .bin processing
+        dynamicprop_handles; % An array of handles to dynamic properties
     end %properties
     
     methods
@@ -66,16 +61,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             obj.findInfo();
             
             % Clear out the (temporary) properties
-            obj.log_data = char(0);
-            obj.log_data_read_ndx = 0;
-            obj.fmt_cell = cell(0);
-            obj.fmt_type_mat = [];
+            for ndx = 1:length(obj.dynamicprop_handles)
+                delete(obj.dynamicprop_handles(ndx));
+            end
         end
         
         function delete(obj)
-            % If Ardupilog errors, close the waitbar
-            delete(obj.wb_handle);
-            % Probably won't ever be open, but try to close the file too, just in case
+            % Probably won't ever be open, but try to close the file, just in case
             if ~isempty(fopen('all')) && any(fopen('all')==obj.fileID)
                 fclose(obj.fileID);
             end
@@ -87,11 +79,18 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % Count number of headers = number of messages, process data
 
             % Open a file at [filePathName filesep fileName]
+            obj.dynamicprop_handles = addprop(obj, 'fileID');
+            % Note: it's important that the first reference to obj.dynamicprop_handles
+            %       changes it from the default empty-double array to an array of handles
+            %       to DynamicProperty objects. If we ever change the above statement
+            %       we may get unexpected errors later in the code.
             [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName], 'r');
             if ~isempty(errmsg) || obj.fileID==-1
                 error(errmsg);
             end
 
+            % Create a (temporary) Dynamic Property to store the log data as a row-matrix of chars (uint8's)
+            obj.dynamicprop_handles(end+1) = addprop(obj, 'log_data');
             % Define the read-size (inf=read whole file) and read the logfile
             readsize = inf; % Block size to read before performing a count
             obj.log_data = fread(obj.fileID, [1, readsize], '*uchar'); % Read the datafile entirely
@@ -234,7 +233,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
             % Remove invalid header candidates
             msgIndices = obj.discoverValidMsgHeaders(msgId,msgLen,allHeaderCandidates);
-            % Save valid headers for reconstructing the log LineNo
+            % Save valid headers for reconstructing LineNo (log line-number) data after finding all valid msgs
+            if ~isprop(obj, 'valid_msgheader_cell')
+                obj.dynamicprop_handles(end+1) = addprop(obj, 'valid_msgheader_cell');
+                obj.valid_msgheader_cell = cell(0);
+            end
             obj.valid_msgheader_cell{end+1, 1} = msgId;
             obj.valid_msgheader_cell{end, 2} = msgIndices';
             
@@ -266,10 +269,14 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 % Instantiate LogMsgGroup class named newName, process FMT data
                 obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
                
-                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                % Create temporary obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                if ~isprop(obj, 'fmt_cell')
+                    obj.dynamicprop_handles(end+1) = addprop(obj, 'fmt_cell');
+                    obj.dynamicprop_handles(end+1) = addprop(obj, 'fmt_type_mat');
+                    % fmt_type_mat equivalent to cell2mat(obj.fmt_cell(:,1)), but faster
+                end
                 obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
                 obj.fmt_type_mat = [obj.fmt_type_mat; newType];
-                
             end
             % msgName needs to be FMT
             fmt_ndx = find(obj.fmt_type_mat == 128);
