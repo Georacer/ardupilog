@@ -10,11 +10,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     end
     properties (Access = private)
         fileID = -1;
-        lastLineNum = 0;
         header = [163 149]; % Message header as defined in ArduPilot
         log_data = char(0); % The .bin file data as a row-matrix of chars (uint8's)
-        log_data_read_ndx = 0; % The index of the last byte processed from the data
-        wb_handle; % Handle to the waitbar, used to delete it in case of error
         fmt_cell = cell(0); % a local copy of the FMT info, to reduce run-time
         fmt_type_mat = []; % equivalent to cell2mat(obj.fmt_cell(:,1)), to reduce run-time
         FMTID = 128;
@@ -67,15 +64,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             
             % Clear out the (temporary) properties
             obj.log_data = char(0);
-            obj.log_data_read_ndx = 0;
             obj.fmt_cell = cell(0);
             obj.fmt_type_mat = [];
+            obj.valid_msgheader_cell = cell(0);
         end
         
         function delete(obj)
-            % If Ardupilog errors, close the waitbar
-            delete(obj.wb_handle);
-            % Probably won't ever be open, but try to close the file too, just in case
+            % Probably won't ever be open, but close the file just in case
             if ~isempty(fopen('all')) && any(fopen('all')==obj.fileID)
                 fclose(obj.fileID);
             end
