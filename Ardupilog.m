@@ -160,6 +160,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Construct the LineNo for the whole log
             LineNo_ndx_vec = sort(vertcat(obj.valid_msgheader_cell{:,2}));
             LineNo_vec = [1:length(LineNo_ndx_vec)]';
+            % Save the last LineNo as the number of messages in the log
+            obj.numMsgs = LineNo_vec(end);
             % For each LogMsgGroup which wasn't filtered
             for i = 1:size(obj.valid_msgheader_cell,1)
                 % Find msgName from msgId in 1st column
