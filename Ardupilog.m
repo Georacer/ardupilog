@@ -23,6 +23,14 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     
     methods
         function obj = Ardupilog(pathAndFileName,msgFilter)
+        % The constructor determines if the user wants to:
+        % 1) create an Ardupilog from a .bin file (DataFlash log)
+        % 2) create an Ardupilog from a .tlog file (MavLink log)
+        % 3) create an Ardupilog from a "bare struct" format
+        % 4) ... (maybe something else, in the future?)
+            
+            % At present, the only thing supported is a DataFlash log (.bin), so
+            % identify which .bin file the user wants
             if nargin == 0
                 % If constructor is empty, prompt user for log file
                 [filename, filepathname, ~] = uigetfile('*.bin','Select binary (.bin) log-file');
@@ -34,8 +42,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.filePathName = filepathname;
                 obj.fileName = [filename, extension];
             end
+            % If user pressed "cancel" then return without trying to process
+            if all(obj.fileName == 0) && all(obj.filePathName == 0)
+                return
+            end
             
-            % Check for the existence of message filters
+            % If the user specified message filters, check that they're a valid form
+            % and load into obj.msgFilter
             if nargin>=2 % msgFilter argument given
                 if ~isempty(msgFilter)
                     if iscellstr(msgFilter) % msgFilter is cell of strings (msgNames)
@@ -48,13 +61,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
             end
 
-            % If user pressed "cancel" then return without trying to process
-            if all(obj.fileName == 0) && all(obj.filePathName == 0)
-                return
-            end
-            
-            % THE MAIN CALL: Begin reading specified log file
-            readLog(obj);
+            % THE MAIN CALL: Begin reading specified DataFlash log file
+            readDataFlashLog(obj);
             
             % Extract firmware version from MSG fields
             obj.findInfo();
@@ -73,7 +81,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
         end
         
-        function [] = readLog(obj)
+        function [] = readDataFlashLog(obj)
         % Open file, read all data, close file,
         % Find message headers, find FMT messages, create LogMsgGroup for each FMT msg,
         % Count number of headers = number of messages, process data
