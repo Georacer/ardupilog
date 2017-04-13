@@ -246,7 +246,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             disp('Done processing.');
         end
         
-        function headerIndices = discoverValidMsgHeaders(obj,msgId,msgLen,headerIndices)
+
+            
+        function data = isolateMsgData(obj,msgId,msgLen,allHeaderCandidates)
+        % Return an msgLen x N array of valid msg data corresponding to msgId
+
+            % First: Remove invalid header candidates
+            
             % Parses the whole log file and find the indices of all the msgs
             % Cross-references with the length of each message
                 
@@ -258,40 +264,38 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Throw out any headers which don't leave room for a susbequent
             % msgId byte
             logSize = length(obj.log_data);
-            invalidMask = (headerIndices+2)>logSize;
-            headerIndices(invalidMask) = [];
+            invalidMask = (allHeaderCandidates+2)>logSize;
+            allHeaderCandidates(invalidMask) = [];
             
             % Filter for the header indices which correspond to the
             % requested msgId
-            validMask = obj.log_data(headerIndices+2)==msgId;
-            headerIndices(~validMask) = [];
+            validMask = obj.log_data(allHeaderCandidates+2)==msgId;
+            allHeaderCandidates(~validMask) = [];
 
             % Check if the message can fit in the log
-            overflow = find(headerIndices+msgLen-1>logSize,1,'first'); 
+            overflow = find(allHeaderCandidates+msgLen-1>logSize,1,'first'); 
             if ~isempty(overflow)
-                headerIndices(overflow:end) = [];
+                allHeaderCandidates(overflow:end) = [];
             end
             
             % Verify that after each msg, another one exists. Otherwise,
             % something is wrong
             % First disregard messages which are at the end of the log
-            b1_next_overflow = find((headerIndices+msgLen)>logSize); % Find where there can be no next b1
-            b2_next_overflow = find((headerIndices+msgLen+1)>logSize); % Find where there can be no next b2
+            b1_next_overflow = find((allHeaderCandidates+msgLen)>logSize); % Find where there can be no next b1
+            b2_next_overflow = find((allHeaderCandidates+msgLen+1)>logSize); % Find where there can be no next b2
             % Then search for the next header for the rest of the messages
-            b1_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b1_next_overflow)) + msgLen);
-            b2_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b2_next_overflow)) + msgLen + 1);
+            b1_next = obj.log_data(allHeaderCandidates(setdiff(1:length(allHeaderCandidates),b1_next_overflow)) + msgLen);
+            b2_next = obj.log_data(allHeaderCandidates(setdiff(1:length(allHeaderCandidates),b2_next_overflow)) + msgLen + 1);
             b1_next_invalid = find(b1_next~=obj.header(1));
             b2_next_invalid = find(b2_next~=obj.header(2));
             % Remove invalid message indices
             invalid = unique([b1_next_invalid b2_next_invalid]);
-            headerIndices(invalid) = [];
-        end
+            allHeaderCandidates(invalid) = [];
             
-        function data = isolateMsgData(obj,msgId,msgLen,allHeaderCandidates)
-        % Return an msgLen x N array of valid msg data corresponding to msgId
-
-            % Remove invalid header candidates
-            msgIndices = obj.discoverValidMsgHeaders(msgId,msgLen,allHeaderCandidates);
+            msgIndices = allHeaderCandidates;
+            
+        
+            % Second: get data from (now only valid) msg "candidates"
             % Save valid headers for reconstructing the log LineNo
             obj.valid_msgheader_cell{end+1, 1} = msgId;
             obj.valid_msgheader_cell{end, 2} = msgIndices';
