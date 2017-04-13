@@ -171,7 +171,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             obj.numMsgs = obj.numMsgs + size(data, 2);
             % END TODO
             
-            % Check for validity of the input msgFilter
+            % Verify that each msgFilter is a valid message found in the log
             if ~isempty(obj.msgFilter)
                 if iscellstr(obj.msgFilter) %obj.msgFilter is a cell-array of strings
                     invalid = find(ismember(obj.msgFilter,obj.fmt_cell(:,2))==0);
@@ -186,7 +186,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
             end
             
-            % Iterate over all the discovered msgs
+            % Iterate over all the discovered msgs.
+            % If not filtered out, store them to their correct LogMsgGroups
             for i=1:length(obj.fmt_cell)
                 msgId = obj.fmt_cell{i,1};
                 msgName = obj.fmt_cell{i,2};
@@ -218,7 +219,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.numMsgs = obj.numMsgs + size(data, 2);
             end
             
-            % Construct the LineNo for the whole log
+            % HGM: If we want, at this point, we could locate any parts of the
+            % log that are NOT parts of valid messages. Don't know how much
+            % extra time this would be, nor if it would be useful.
+            
+            % Construct line numbers (LineNo) for the whole log, store as appropriate
             LineNo_ndx_vec = sort(vertcat(obj.valid_msgheader_cell{:,2}));
             LineNo_vec = [1:length(LineNo_ndx_vec)]';
             % Record the total number of log messages
