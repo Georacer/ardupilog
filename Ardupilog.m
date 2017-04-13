@@ -97,6 +97,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % Find message headers, find FMT messages, create LogMsgGroup for each FMT msg,
         % Count number of headers = number of messages, process data
 
+            %% Step 1: Open a file, read it into memory, and close it.
             % Open a file at [filePathName filesep fileName]
             [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName], 'r');
             if ~isempty(errmsg) || obj.fileID==-1
@@ -114,8 +115,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 warn('File not closed successfully')
             end
             
-            % Discover the locations of all the messages
-            allHeaderCandidates = obj.discoverHeaders([]);
+            %% Step 2: Find all FMT messages
+            % Discover the locations of every message header
+            % (most are valid messages, a few are just data which accidentally
+            %  happen to be the header-byte sequence)
+            allHeaderCandidates = strfind(obj.log_data, obj.header);
             
             % Find the FMT message legnth
             obj.findFMTLength(allHeaderCandidates);
@@ -235,15 +239,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             headerIndices(invalid) = [];
         end
             
-        function headerIndices = discoverHeaders(obj,msgId)
-            % Find all candidate headers within the log data
-            % Not all Indices may correspond to actual messages
-            if nargin<2
-                msgId = [];
-            end
-            headerIndices = strfind(obj.log_data, [obj.header msgId]);
-        end
-
         function data = isolateMsgData(obj,msgId,msgLen,allHeaderCandidates)
         % Return an msgLen x N array of valid msg data corresponding to msgId
 
