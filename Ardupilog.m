@@ -65,7 +65,18 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             readDataFlashLog(obj);
             
             % Extract firmware version from MSG fields
-            obj.findInfo();
+            if isprop(obj,'MSG')
+                for type = {'ArduPlane','ArduCopter','ArduRover','ArduSub'}
+                    info_row = strmatch(type{:},obj.MSG.Message);
+                    if ~isempty(info_row)
+                        obj.platform = type{:};
+                        fields_cell = strsplit(obj.MSG.Message(info_row,:));
+                        obj.version = fields_cell{1,2};
+                        commit = trimTail(fields_cell{1,3});
+                        obj.commit = commit(2:(end-1));
+                    end
+                end
+            end
             
             % Clear out the (temporary) properties
             obj.log_data = char(0);
@@ -282,23 +293,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             obj.(FMTName).storeData(data);
             % Add to number of msgs in Ardupilog
             obj.numMsgs = obj.numMsgs + size(data, 1);
-        end
-        
-        function [] = findInfo(obj)
-            % Extract vehicle firmware info
-                        
-            if isprop(obj,'MSG')
-                for type = {'ArduPlane','ArduCopter','ArduRover','ArduSub'}
-                    info_row = strmatch(type{:},obj.MSG.Message);
-                    if ~isempty(info_row)
-                        obj.platform = type{:};
-                        fields_cell = strsplit(obj.MSG.Message(info_row,:));
-                        obj.version = fields_cell{1,2};
-                        commit = trimTail(fields_cell{1,3});
-                        obj.commit = commit(2:(end-1));
-                    end
-                end
-            end
         end
         
         function [] = findFMTLength(obj,allHeaderCandidates)
