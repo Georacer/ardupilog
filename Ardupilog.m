@@ -135,9 +135,41 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
             end
             
-            % Read the FMT messages
+            % Get all the FMT messages in a byte-by-byte matrix of size FMTmsgLen x N
             data = obj.isolateMsgData(obj.FMTID,obj.FMTLen,allHeaderCandidates);
-            obj.createLogMsgGroups(data');
+
+            % For each FMT message, create a new LogMsgGroup
+            % (as well as some temporary speedup properties: fmt_cell and fmt_type_mat)
+            for i=1:size(data,2)
+                % Process FMT message to create a new dynamic property
+                msgData = data(:,i)';
+                
+                % HGM: Can we un-hard-code the following? I'm not sure...
+                newType = double(msgData(1));
+                newLen = double(msgData(2));                
+                newName = char(trimTail(msgData(3:6)));
+                newFmt = char(trimTail(msgData(7:22)));
+                newLabels = char(trimTail(msgData(23:86)));
+                
+                % Create dynamic property of Ardupilog with newName
+                addprop(obj, newName);
+                % Instantiate LogMsgGroup class named newName, process FMT data
+                obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
+                
+                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
+                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
+            end
+            
+            % TODO: If FMT is not filtered out...
+            % Store all the FMT message data into the newly-created FMT LogMsgGroup
+            fmt_ndx = find(obj.fmt_type_mat == 128);
+            FMTName = obj.fmt_cell{fmt_ndx, 2};
+            % Store msgData correctly in that LogMsgGroup
+            obj.(FMTName).storeData(data');
+            % Add to number of msgs in Ardupilog
+            obj.numMsgs = obj.numMsgs + size(data, 2);
+            % END TODO
             
             % Check for validity of the input msgFilter
             if ~isempty(obj.msgFilter)
@@ -268,37 +300,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % and reshape it into a msgLen x N array - CAUTION: reshaping vector
             % to array builds the array column-wise!!!
             data = reshape(dataVector,[(msgLen-3) length(msgIndices)] );
-        end
-        
-        function [] = createLogMsgGroups(obj,data)
-            for i=1:size(data,1)
-                % Process FMT message to create a new dynamic property
-                msgData = data(i,:);
-                
-                newType = double(msgData(1));
-                newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
-                
-                newName = char(trimTail(msgData(3:6)));
-                newFmt = char(trimTail(msgData(7:22)));
-                newLabels = char(trimTail(msgData(23:86)));
-                
-                % Create dynamic property of Ardupilog with newName
-                addprop(obj, newName);
-                % Instantiate LogMsgGroup class named newName, process FMT data
-                obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
-               
-                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
-                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
-                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
-                
-            end
-            % msgName needs to be FMT
-            fmt_ndx = find(obj.fmt_type_mat == 128);
-            FMTName = obj.fmt_cell{fmt_ndx, 2};
-            % Store msgData correctly in that LogMsgGroup
-            obj.(FMTName).storeData(data);
-            % Add to number of msgs in Ardupilog
-            obj.numMsgs = obj.numMsgs + size(data, 1);
         end
         
     end %methods
