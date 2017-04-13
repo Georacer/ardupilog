@@ -298,6 +298,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Now msgIndices are all validated messages
             msgIndices = msgHeaderCandidates;
 
+            
             % Second step: Generate the N x msgLen array of data bytes
             %   This can be done from having the valid message start locations and
             %   their lengths. The process is to create a linear-indexing-array of
@@ -305,8 +306,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             %   get the actual data bytes from indexing the log data, and then
             %   reshape THAT into the final data-byte array.
 
-            % Construct the linear-indexing array
-            indexArray = ones(length(msgIndices),1)*(3:(msgLen-1)) + msgIndices'*ones(1,msgLen-3);
+            % Construct the linear-indexing array by summing
+            %  (top) the indices relative to the msg header position, with
+            %  (bot) the absolute position of the msg header in the log.
+            indexArray = repmat(3:(msgLen-1), length(msgIndices), 1) + ...
+                         repmat(msgIndices', 1, msgLen-3);
             % Vectorize it into an 1 x N*msgLen vector
             indexVector = reshape(indexArray',[1 length(msgIndices)*(msgLen-3)]);
             % Get the actual log data as a vector
