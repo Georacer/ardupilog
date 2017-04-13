@@ -23,6 +23,14 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     
     methods
         function obj = Ardupilog(pathAndFileName,msgFilter)
+        % The constructor determines if the user wants to:
+        % 1) create an Ardupilog from a .bin file (DataFlash log)
+        % 2) create an Ardupilog from a .tlog file (MavLink log)
+        % 3) create an Ardupilog from a "bare struct" format
+        % 4) ... (maybe something else, in the future?)
+            
+            % At present, the only thing supported is a DataFlash log (.bin), so
+            % identify which .bin file the user wants
             if nargin == 0
                 % If constructor is empty, prompt user for log file
                 [filename, filepathname, ~] = uigetfile('*.bin','Select binary (.bin) log-file');
@@ -34,8 +42,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.filePathName = filepathname;
                 obj.fileName = [filename, extension];
             end
+            % If user pressed "cancel" then return without trying to process
+            if all(obj.fileName == 0) && all(obj.filePathName == 0)
+                return
+            end
             
-            % Check for the existence of message filters
+            % If the user specified message filters, check that they're a valid form
+            % and load into obj.msgFilter
             if nargin>=2 % msgFilter argument given
                 if ~isempty(msgFilter)
                     if iscellstr(msgFilter) % msgFilter is cell of strings (msgNames)
@@ -48,16 +61,22 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
             end
 
-            % If user pressed "cancel" then return without trying to process
-            if all(obj.fileName == 0) && all(obj.filePathName == 0)
-                return
-            end
-            
-            % THE MAIN CALL: Begin reading specified log file
-            readLog(obj);
+            % THE MAIN CALL: Begin reading specified DataFlash log file
+            readDataFlashLog(obj);
             
             % Extract firmware version from MSG fields
-            obj.findInfo();
+            if isprop(obj,'MSG')
+                for type = {'ArduPlane','ArduCopter','ArduRover','ArduSub'}
+                    info_row = strmatch(type{:},obj.MSG.Message);
+                    if ~isempty(info_row)
+                        obj.platform = type{:};
+                        fields_cell = strsplit(obj.MSG.Message(info_row,:));
+                        obj.version = fields_cell{1,2};
+                        commit = trimTail(fields_cell{1,3});
+                        obj.commit = commit(2:(end-1));
+                    end
+                end
+            end
             
             % Clear out the (temporary) properties
             obj.log_data = char(0);
@@ -73,11 +92,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
         end
         
-        function [] = readLog(obj)
+        function [] = readDataFlashLog(obj)
         % Open file, read all data, close file,
         % Find message headers, find FMT messages, create LogMsgGroup for each FMT msg,
         % Count number of headers = number of messages, process data
 
+            %% Step 1: Open a file, read it into memory, and close it.
             % Open a file at [filePathName filesep fileName]
             [obj.fileID, errmsg] = fopen([obj.filePathName, filesep, obj.fileName], 'r');
             if ~isempty(errmsg) || obj.fileID==-1
@@ -95,17 +115,63 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 warn('File not closed successfully')
             end
             
-            % Discover the locations of all the messages
-            allHeaderCandidates = obj.discoverHeaders([]);
+            %% Step 2: Find all FMT messages
+            % Discover the locations of every message header
+            % (most are valid messages, a few are just data which accidentally
+            %  happen to be the header-byte sequence)
+            allHeaderCandidates = strfind(obj.log_data, obj.header);
             
-            % Find the FMT message legnth
-            obj.findFMTLength(allHeaderCandidates);
+            % Try to find the length of the FMT message
+            % (from the FMT message definining itself. If unsuccessful, use the 
+            %  hard-coded default, obj.FMTLen, which is probably correct anyways)
+            for index = allHeaderCandidates
+                % Check if this is the FMT message which defines the FMT message specifics
+                if obj.log_data(index+2)==obj.FMTID && obj.log_data(index+3)==obj.FMTID
+                    obj.FMTLen = double(obj.log_data(index+4));
+                    break; % Quit looping as soon as the FMT length is found
+                elseif index == allHeaderCandidates(end) % if this is the last headerCandidate
+                    warning(['Could not find the FMT message to extract its length. '...
+                             'Leaving as the default value: ', num2str(obj.FMTLen)]);
+                end
+            end
             
-            % Read the FMT messages
+            % Get all the FMT messages in a byte-by-byte matrix of size FMTmsgLen x N
             data = obj.isolateMsgData(obj.FMTID,obj.FMTLen,allHeaderCandidates);
-            obj.createLogMsgGroups(data');
+
+            % For each FMT message, create a new LogMsgGroup
+            % (as well as some temporary speedup properties: fmt_cell and fmt_type_mat)
+            for i=1:size(data,2)
+                % Process FMT message to create a new dynamic property
+                msgData = data(:,i)';
+                
+                % HGM: Can we un-hard-code the following? I'm not sure...
+                newType = double(msgData(1));
+                newLen = double(msgData(2));                
+                newName = char(trimTail(msgData(3:6)));
+                newFmt = char(trimTail(msgData(7:22)));
+                newLabels = char(trimTail(msgData(23:86)));
+                
+                % Create dynamic property of Ardupilog with newName
+                addprop(obj, newName);
+                % Instantiate LogMsgGroup class named newName, process FMT data
+                obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
+                
+                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
+                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
+            end
             
-            % Check for validity of the input msgFilter
+            % TODO: If FMT is not filtered out...
+            % Store all the FMT message data into the newly-created FMT LogMsgGroup
+            fmt_ndx = find(obj.fmt_type_mat == 128);
+            FMTName = obj.fmt_cell{fmt_ndx, 2};
+            % Store msgData correctly in that LogMsgGroup
+            obj.(FMTName).storeData(data');
+            % Add to number of msgs in Ardupilog
+            obj.numMsgs = obj.numMsgs + size(data, 2);
+            % END TODO
+            
+            % Verify that each msgFilter is a valid message found in the log
             if ~isempty(obj.msgFilter)
                 if iscellstr(obj.msgFilter) %obj.msgFilter is a cell-array of strings
                     invalid = find(ismember(obj.msgFilter,obj.fmt_cell(:,2))==0);
@@ -120,7 +186,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 end
             end
             
-            % Iterate over all the discovered msgs
+            % Iterate over all the discovered msgs.
+            % If not filtered out, store them to their correct LogMsgGroups
             for i=1:length(obj.fmt_cell)
                 msgId = obj.fmt_cell{i,1};
                 msgName = obj.fmt_cell{i,2};
@@ -152,7 +219,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.numMsgs = obj.numMsgs + size(data, 2);
             end
             
-            % Construct the LineNo for the whole log
+            % HGM: If we want, at this point, we could locate any parts of the
+            % log that are NOT parts of valid messages. Don't know how much
+            % extra time this would be, nor if it would be useful.
+            
+            % Construct line numbers (LineNo) for the whole log, store as appropriate
             LineNo_ndx_vec = sort(vertcat(obj.valid_msgheader_cell{:,2}));
             LineNo_vec = [1:length(LineNo_ndx_vec)]';
             % Record the total number of log messages
@@ -175,139 +246,85 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             disp('Done processing.');
         end
         
-        function headerIndices = discoverValidMsgHeaders(obj,msgId,msgLen,headerIndices)
-            % Parses the whole log file and find the indices of all the msgs
-            % Cross-references with the length of each message
-                
-            %debug = true;
-            debug = false;
 
-            if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
             
-            % Throw out any headers which don't leave room for a susbequent
-            % msgId byte
-            logSize = length(obj.log_data);
-            invalidMask = (headerIndices+2)>logSize;
-            headerIndices(invalidMask) = [];
-            
-            % Filter for the header indices which correspond to the
-            % requested msgId
-            validMask = obj.log_data(headerIndices+2)==msgId;
-            headerIndices(~validMask) = [];
-
-            % Check if the message can fit in the log
-            overflow = find(headerIndices+msgLen-1>logSize,1,'first'); 
-            if ~isempty(overflow)
-                headerIndices(overflow:end) = [];
-            end
-            
-            % Verify that after each msg, another one exists. Otherwise,
-            % something is wrong
-            % First disregard messages which are at the end of the log
-            b1_next_overflow = find((headerIndices+msgLen)>logSize); % Find where there can be no next b1
-            b2_next_overflow = find((headerIndices+msgLen+1)>logSize); % Find where there can be no next b2
-            % Then search for the next header for the rest of the messages
-            b1_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b1_next_overflow)) + msgLen);
-            b2_next = obj.log_data(headerIndices(setdiff(1:length(headerIndices),b2_next_overflow)) + msgLen + 1);
-            b1_next_invalid = find(b1_next~=obj.header(1));
-            b2_next_invalid = find(b2_next~=obj.header(2));
-            % Remove invalid message indices
-            invalid = unique([b1_next_invalid b2_next_invalid]);
-            headerIndices(invalid) = [];
-        end
-            
-        function headerIndices = discoverHeaders(obj,msgId)
-            % Find all candidate headers within the log data
-            % Not all Indices may correspond to actual messages
-            if nargin<2
-                msgId = [];
-            end
-            headerIndices = strfind(obj.log_data, [obj.header msgId]);
-        end
-
         function data = isolateMsgData(obj,msgId,msgLen,allHeaderCandidates)
         % Return an msgLen x N array of valid msg data corresponding to msgId
 
-            % Remove invalid header candidates
-            msgIndices = obj.discoverValidMsgHeaders(msgId,msgLen,allHeaderCandidates);
-            % Save valid headers for reconstructing the log LineNo
-            obj.valid_msgheader_cell{end+1, 1} = msgId;
-            obj.valid_msgheader_cell{end, 2} = msgIndices';
+            % First step: Remove invalid header candidates
+            %   This is done by checking that a new message header begins where it
+            %   should, after exactly the correct number of bytes from the defined
+            %   message length.
             
-            % Generate the N x msgLen array which corresponds to the indices where FMT information exists
-            indexArray = ones(length(msgIndices),1)*(3:(msgLen-1)) + msgIndices'*ones(1,msgLen-3);
+            %debug = true;
+            debug = false;
+            if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
+            
+            % Throw out any headers which don't leave room for a subsequent msgId byte
+            %
+            % HGM: Since the header candidates are ordered, is there any advantage to just
+            %      checking the final one(s) rather than all of them?
+            %
+            logSize = length(obj.log_data);
+            invalidMask = (allHeaderCandidates+2)>logSize;
+            allHeaderCandidates(invalidMask) = [];
+            
+            % Filter for the header candidate indices which correspond to the requested msgId
+            validMask = obj.log_data(allHeaderCandidates+2)==msgId;
+            msgHeaderCandidates = allHeaderCandidates(validMask);
+
+            % Discard any candidates that can't fit in the log
+            overflow = find(msgHeaderCandidates+msgLen-1>logSize,1,'first'); 
+            if ~isempty(overflow)
+                msgHeaderCandidates(overflow:end) = [];
+            end
+            
+            % Verify that after each msg, another valid header begins.
+            % (Otherwise, something is wrong)
+            % Since messages which are at the end of the log will cause an error
+            % when checking the following bytes, count them as valid.
+            b1_next_overflow = find((msgHeaderCandidates+msgLen)>logSize); % Find where there can be no next b1
+            b2_next_overflow = find((msgHeaderCandidates+msgLen+1)>logSize); % Find where there can be no next b2
+            % Now, find the 2 bytes after each message candidate
+            b1_next = obj.log_data(msgHeaderCandidates(setdiff(1:length(msgHeaderCandidates),b1_next_overflow)) + msgLen);
+            b2_next = obj.log_data(msgHeaderCandidates(setdiff(1:length(msgHeaderCandidates),b2_next_overflow)) + msgLen + 1);
+            % If the following bytes are NOT a valid header, mark that candidate as invalid
+            b1_next_invalid = find(b1_next~=obj.header(1));
+            b2_next_invalid = find(b2_next~=obj.header(2));
+            % Remove invalid message candidate indices
+            invalid = unique([b1_next_invalid b2_next_invalid]);
+            msgHeaderCandidates(invalid) = [];
+
+            % Now msgIndices are all validated messages
+            msgIndices = msgHeaderCandidates;
+
+            
+            % Second step: Generate the N x msgLen array of data bytes
+            %   This can be done from having the valid message start locations and
+            %   their lengths. The process is to create a linear-indexing-array of
+            %   the position of all data bytes in the log, reshape it into a vector,
+            %   get the actual data bytes from indexing the log data, and then
+            %   reshape THAT into the final data-byte array.
+
+            % Construct the linear-indexing array by summing
+            %  (top) the indices relative to the msg header position, with
+            %  (bot) the absolute position of the msg header in the log.
+            indexArray = repmat(3:(msgLen-1), length(msgIndices), 1) + ...
+                         repmat(msgIndices', 1, msgLen-3);
             % Vectorize it into an 1 x N*msgLen vector
             indexVector = reshape(indexArray',[1 length(msgIndices)*(msgLen-3)]);
-            % Get the FMT data as a vector
+            % Get the actual log data as a vector
             dataVector = obj.log_data(indexVector);
             % and reshape it into a msgLen x N array - CAUTION: reshaping vector
             % to array builds the array column-wise!!!
             data = reshape(dataVector,[(msgLen-3) length(msgIndices)] );
+            
+            
+            % Finally, save valid headers for reconstructing the log LineNo later
+            obj.valid_msgheader_cell{end+1, 1} = msgId;
+            obj.valid_msgheader_cell{end, 2} = msgIndices';
         end
         
-        function [] = createLogMsgGroups(obj,data)
-            for i=1:size(data,1)
-                % Process FMT message to create a new dynamic property
-                msgData = data(i,:);
-                
-                newType = double(msgData(1));
-                newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
-                
-                newName = char(trimTail(msgData(3:6)));
-                newFmt = char(trimTail(msgData(7:22)));
-                newLabels = char(trimTail(msgData(23:86)));
-                
-                % Create dynamic property of Ardupilog with newName
-                addprop(obj, newName);
-                % Instantiate LogMsgGroup class named newName, process FMT data
-                obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
-               
-                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
-                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
-                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
-                
-            end
-            % msgName needs to be FMT
-            fmt_ndx = find(obj.fmt_type_mat == 128);
-            FMTName = obj.fmt_cell{fmt_ndx, 2};
-            % Store msgData correctly in that LogMsgGroup
-            obj.(FMTName).storeData(data);
-            % Add to number of msgs in Ardupilog
-            obj.numMsgs = obj.numMsgs + size(data, 1);
-        end
-        
-        function [] = findInfo(obj)
-            % Extract vehicle firmware info
-                        
-            if isprop(obj,'MSG')
-                for type = {'ArduPlane','ArduCopter','ArduRover','ArduSub'}
-                    info_row = strmatch(type{:},obj.MSG.Message);
-                    if ~isempty(info_row)
-                        obj.platform = type{:};
-                        fields_cell = strsplit(obj.MSG.Message(info_row,:));
-                        obj.version = fields_cell{1,2};
-                        commit = trimTail(fields_cell{1,3});
-                        obj.commit = commit(2:(end-1));
-                    end
-                end
-            end
-        end
-        
-        function [] = findFMTLength(obj,allHeaderCandidates)
-            for index = allHeaderCandidates
-            % Try to find the length of the format message
-                msgId = obj.log_data(index+2); % Get the next expected msgId
-                if obj.log_data(index+3)==obj.FMTID % Check if this is the definition of the FMT message
-                    if msgId == obj.FMTID % Check if it matches the FMT message
-                        obj.FMTLen = double(obj.log_data(index+4));
-                        return; % Return as soon as the FMT length is found
-                    end
-                end
-            end
-            warning('Could not find the FMT message to extract its length. Leaving the default %d',obj.FMTLen);
-            return;
-        end
-
     end %methods
 end %classdef Ardupilog
 
