@@ -251,64 +251,74 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         function data = isolateMsgData(obj,msgId,msgLen,allHeaderCandidates)
         % Return an msgLen x N array of valid msg data corresponding to msgId
 
-            % First: Remove invalid header candidates
+            % First step: Remove invalid header candidates
+            %   This is done by checking that a new message header begins where it
+            %   should, after exactly the correct number of bytes from the defined
+            %   message length.
             
-            % Parses the whole log file and find the indices of all the msgs
-            % Cross-references with the length of each message
-                
             %debug = true;
             debug = false;
-
             if debug; fprintf('Searching for msgs with id=%d\n',msgId); end
             
-            % Throw out any headers which don't leave room for a susbequent
-            % msgId byte
+            % Throw out any headers which don't leave room for a subsequent msgId byte
+            %
+            % HGM: Since the header candidates are ordered, is there any advantage to just
+            %      checking the final one(s) rather than all of them?
+            %
             logSize = length(obj.log_data);
             invalidMask = (allHeaderCandidates+2)>logSize;
             allHeaderCandidates(invalidMask) = [];
             
-            % Filter for the header indices which correspond to the
-            % requested msgId
+            % Filter for the header candidate indices which correspond to the requested msgId
             validMask = obj.log_data(allHeaderCandidates+2)==msgId;
-            allHeaderCandidates(~validMask) = [];
+            msgHeaderCandidates = allHeaderCandidates(validMask);
 
-            % Check if the message can fit in the log
-            overflow = find(allHeaderCandidates+msgLen-1>logSize,1,'first'); 
+            % Discard any candidates that can't fit in the log
+            overflow = find(msgHeaderCandidates+msgLen-1>logSize,1,'first'); 
             if ~isempty(overflow)
-                allHeaderCandidates(overflow:end) = [];
+                msgHeaderCandidates(overflow:end) = [];
             end
             
-            % Verify that after each msg, another one exists. Otherwise,
-            % something is wrong
-            % First disregard messages which are at the end of the log
-            b1_next_overflow = find((allHeaderCandidates+msgLen)>logSize); % Find where there can be no next b1
-            b2_next_overflow = find((allHeaderCandidates+msgLen+1)>logSize); % Find where there can be no next b2
-            % Then search for the next header for the rest of the messages
-            b1_next = obj.log_data(allHeaderCandidates(setdiff(1:length(allHeaderCandidates),b1_next_overflow)) + msgLen);
-            b2_next = obj.log_data(allHeaderCandidates(setdiff(1:length(allHeaderCandidates),b2_next_overflow)) + msgLen + 1);
+            % Verify that after each msg, another valid header begins.
+            % (Otherwise, something is wrong)
+            % Since messages which are at the end of the log will cause an error
+            % when checking the following bytes, count them as valid.
+            b1_next_overflow = find((msgHeaderCandidates+msgLen)>logSize); % Find where there can be no next b1
+            b2_next_overflow = find((msgHeaderCandidates+msgLen+1)>logSize); % Find where there can be no next b2
+            % Now, find the 2 bytes after each message candidate
+            b1_next = obj.log_data(msgHeaderCandidates(setdiff(1:length(msgHeaderCandidates),b1_next_overflow)) + msgLen);
+            b2_next = obj.log_data(msgHeaderCandidates(setdiff(1:length(msgHeaderCandidates),b2_next_overflow)) + msgLen + 1);
+            % If the following bytes are NOT a valid header, mark that candidate as invalid
             b1_next_invalid = find(b1_next~=obj.header(1));
             b2_next_invalid = find(b2_next~=obj.header(2));
-            % Remove invalid message indices
+            % Remove invalid message candidate indices
             invalid = unique([b1_next_invalid b2_next_invalid]);
-            allHeaderCandidates(invalid) = [];
-            
-            msgIndices = allHeaderCandidates;
-            
-        
-            % Second: get data from (now only valid) msg "candidates"
-            % Save valid headers for reconstructing the log LineNo
-            obj.valid_msgheader_cell{end+1, 1} = msgId;
-            obj.valid_msgheader_cell{end, 2} = msgIndices';
-            
-            % Generate the N x msgLen array which corresponds to the indices where FMT information exists
+            msgHeaderCandidates(invalid) = [];
+
+            % Now msgIndices are all validated messages
+            msgIndices = msgHeaderCandidates;
+
+            % Second step: Generate the N x msgLen array of data bytes
+            %   This can be done from having the valid message start locations and
+            %   their lengths. The process is to create a linear-indexing-array of
+            %   the position of all data bytes in the log, reshape it into a vector,
+            %   get the actual data bytes from indexing the log data, and then
+            %   reshape THAT into the final data-byte array.
+
+            % Construct the linear-indexing array
             indexArray = ones(length(msgIndices),1)*(3:(msgLen-1)) + msgIndices'*ones(1,msgLen-3);
             % Vectorize it into an 1 x N*msgLen vector
             indexVector = reshape(indexArray',[1 length(msgIndices)*(msgLen-3)]);
-            % Get the FMT data as a vector
+            % Get the actual log data as a vector
             dataVector = obj.log_data(indexVector);
             % and reshape it into a msgLen x N array - CAUTION: reshaping vector
             % to array builds the array column-wise!!!
             data = reshape(dataVector,[(msgLen-3) length(msgIndices)] );
+            
+            
+            % Finally, save valid headers for reconstructing the log LineNo later
+            obj.valid_msgheader_cell{end+1, 1} = msgId;
+            obj.valid_msgheader_cell{end, 2} = msgIndices';
         end
         
     end %methods
