@@ -121,8 +121,19 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             %  happen to be the header-byte sequence)
             allHeaderCandidates = strfind(obj.log_data, obj.header);
             
-            % Find the FMT message legnth
-            obj.findFMTLength(allHeaderCandidates);
+            % Try to find the length of the FMT message
+            % (from the FMT message definining itself. If unsuccessful, use the 
+            %  hard-coded default, obj.FMTLen, which is probably correct anyways)
+            for index = allHeaderCandidates
+                % Check if this is the FMT message which defines the FMT message specifics
+                if obj.log_data(index+2)==obj.FMTID && obj.log_data(index+3)==obj.FMTID
+                    obj.FMTLen = double(obj.log_data(index+4));
+                    break; % Quit looping as soon as the FMT length is found
+                elseif index == allHeaderCandidates(end) % if this is the last headerCandidate
+                    warning(['Could not find the FMT message to extract its length. '...
+                             'Leaving as the default value: ', num2str(obj.FMTLen)]);
+                end
+            end
             
             % Read the FMT messages
             data = obj.isolateMsgData(obj.FMTID,obj.FMTLen,allHeaderCandidates);
@@ -290,21 +301,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             obj.numMsgs = obj.numMsgs + size(data, 1);
         end
         
-        function [] = findFMTLength(obj,allHeaderCandidates)
-            for index = allHeaderCandidates
-            % Try to find the length of the format message
-                msgId = obj.log_data(index+2); % Get the next expected msgId
-                if obj.log_data(index+3)==obj.FMTID % Check if this is the definition of the FMT message
-                    if msgId == obj.FMTID % Check if it matches the FMT message
-                        obj.FMTLen = double(obj.log_data(index+4));
-                        return; % Return as soon as the FMT length is found
-                    end
-                end
-            end
-            warning('Could not find the FMT message to extract its length. Leaving the default %d',obj.FMTLen);
-            return;
-        end
-
     end %methods
 end %classdef Ardupilog
 
