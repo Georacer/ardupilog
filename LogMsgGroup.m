@@ -168,6 +168,12 @@ classdef LogMsgGroup < dynamicprops
                 error(['Unsupported slice type: ', slice_type]);
             end
             slice_ndx = [start_ndx:1:end_ndx];
+
+            % If the slice is not valid, return an empty LogMsgGroup
+            if isempty(slice_ndx)
+                slice = LogMsgGroup.empty();
+                return
+            end
             
             % Create the slice as a new LogMsgGroup
             field_names_string = strjoin(obj.fieldNameCell,',');
