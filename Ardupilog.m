@@ -19,6 +19,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTID = 128;
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
+        logMsgGroups = []; % Array of meta.DynamicProperty items, which will be LogMsgGroups
     end %properties
     
     methods
@@ -257,8 +258,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 newFmt = char(trimTail(msgData(7:22)));
                 newLabels = char(trimTail(msgData(23:86)));
                 
-                % Create dynamic property of Ardupilog with newName
-                addprop(obj, newName);
+                % Create dynamic property of Ardupilog with newName, and add to logMsgGroups array
+                if isempty(obj.logMsgGroups)
+                    obj.logMsgGroups = addprop(obj, newName);
+                else
+                    obj.logMsgGroups(end+1) = addprop(obj, newName);
+                end
+                
                 % Instantiate LogMsgGroup class named newName, process FMT data
                 obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
                
@@ -308,6 +314,53 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             return;
         end
 
+        function slice = getSlice(obj, slice_values, slice_type)
+        % This returns an indexed portion (a "slice") of an Ardupilog
+        % Example:
+        %    log_during_cruise = Log.getSlice([t_begin_cruise, t_end_cruise], 'TimeUS')
+        %  will return a smaller Ardupilog, only containing log data between
+        %  TimeUS values greater than t_begin_cruise and less than t_end_cruise.
+
+            % Copy all the properties, zero the number of messages
+            slice = copy(obj);
+            slice.numMsgs = 0;
+            
+            % Loop through the LogMsgGroups, slicing each one
+            for msgGroup = slice.logMsgGroups
+                % If the LogMsgGroup has been deleted, skip it
+                if ~isvalid(msgGroup)
+                    continue
+                end
+                
+                % Slice the LogMsgGroup
+                lmg_slice = slice.(msgGroup.Name).getSlice(slice_values, slice_type);
+                % If the slice is not empty, add it to the Ardupilog slice
+                if isempty(lmg_slice)
+                    delete(msgGroup)
+                else
+                    slice.(msgGroup.Name) = lmg_slice;
+                    slice.numMsgs = slice.numMsgs + size(slice.(msgGroup.Name).LineNo, 1);
+                end
+            end
+        end
+        
+    end
+    methods(Access=protected)
+        function cpObj = copyElement(obj)
+        % Makes copy() into a "deep copy" method (i.e. when copying an Ardupilog, the
+        % new copy also has all the data stored in dynamic-property LogMsgGroups)
+            
+            % Create a standard copy (to copy all properties)
+            cpObj = copyElement@matlab.mixin.Copyable(obj);
+            
+            % Deep-copy the Dynamic Properties
+            for ndx = 1:length(obj.logMsgGroups)
+                % Create a new dynamic property
+                cpObj.logMsgGroups(ndx) = addprop(cpObj, obj.logMsgGroups(ndx).Name);
+                % Copy the data from the original
+                cpObj.(obj.logMsgGroups(ndx).Name) = copy(obj.(obj.logMsgGroups(ndx).Name));
+            end
+        end
     end %methods
 end %classdef Ardupilog
 
