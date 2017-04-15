@@ -161,6 +161,9 @@ classdef LogMsgGroup < dynamicprops
               case 'TimeUS'
                 start_ndx = find(obj.TimeUS >= slice_values(1),1,'first');
                 end_ndx = find(obj.TimeUS <= slice_values(2),1,'last');
+              case 'LineNo'
+                start_ndx = find(obj.LineNo >= slice_values(1),1,'first');
+                end_ndx = find(obj.LineNo <= slice_values(2),1,'last');
               otherwise
                 error(['Unsupported slice type: ', slice_type]);
             end
