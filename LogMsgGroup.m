@@ -174,8 +174,7 @@ classdef LogMsgGroup < dynamicprops
             slice = LogMsgGroup(obj.type, obj.name, obj.data_len, obj.format, field_names_string);
             % For each data field, copy the slice of data, identified by slice_ndx
             for field_name = slice.fieldNameCell
-                temp_copy = obj.(field_name{1});
-                slice.(field_name{1}) = temp_copy(slice_ndx);
+                slice.(field_name{1}) = obj.(field_name{1})(slice_ndx);
             end
             % Copy also the LineNo slice
             slice.setLineNo(obj.LineNo(slice_ndx));
