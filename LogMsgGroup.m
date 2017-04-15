@@ -147,7 +147,34 @@ classdef LogMsgGroup < dynamicprops
                 warning(sprintf('Incompatible declared message type length (%d) and format length (%d) in msg %d/%s',obj.data_len, length+3, obj.type, obj.name));
             end
         end
-        
+
+        function [slice, remainder] = getSlice(obj, slice_values, slice_type)
+        % This returns an indexed portion (a "slice") of a LogMsgGroup
+        % Example:
+        %    cruise_gps_msgs = GPS.getSlice([t_begin_cruise, t_end_cruise], 'TimeUS')
+        %  will return a smaller LogMsgGroup than GPS, only containing data
+        %  between TimeUS values greater than t_begin_cruise and less than
+        %  t_end_cruise.
+            
+            % Find indices corresponding to slice_values, from slice_type
+            switch slice_type
+              case 'TimeUS'
+                start_ndx = find(obj.TimeUS >= slice_values(1),1,'first');
+                end_ndx = find(obj.TimeUS <= slice_values(2),1,'last');
+              otherwise
+                error(['Unsupported slice type: ', slice_type]);
+            end
+            slice_ndx = [start_ndx:1:end_ndx];
+            
+            % Create the slice as a new LogMsgGroup
+            field_names_string = strjoin(obj.fieldNameCell,',');
+            slice = LogMsgGroup(obj.type, obj.name, obj.data_len, obj.format, field_names_string);
+            % For each field, copy the slice of data, identified by slice_ndx
+            for field_name = slice.fieldNameCell
+                temp_copy = obj.(field_name{1});
+                slice.(field_name{1}) = temp_copy(slice_ndx);
+            end
+        end
     end
 end
 
