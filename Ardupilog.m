@@ -64,6 +64,20 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % Attempt to find the UTC time of boot (at boot, TimeUS = 0)
             obj.findBootTimeUTC();
             
+            % Set the bootDatenumUTC for all LogMsgGroups
+            % HGM: This can probably be done better after some code reorganization,
+            %  but for now it works well enough. After refactoring is settled, we
+            %  might set the bootDatenumUTC when we set the LineNo, or when we store
+            %  the TimeUS data, whatever makes sense based on how we decide to handle
+            %  message filtering.
+            if ~isnan(obj.bootDatenumUTC)
+                for prop = properties(obj)'
+                    if ismethod(obj.(prop{1}), 'setBootDatenumUTC')
+                        obj.(prop{1}).setBootDatenumUTC(obj.bootDatenumUTC);
+                    end
+                end
+            end
+            
             % Clear out the (temporary) properties
             obj.log_data = char(0);
             obj.fmt_cell = cell(0);

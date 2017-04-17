@@ -4,6 +4,7 @@ classdef LogMsgGroup < dynamicprops
         format = ''; % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
         fieldInfo = []; % Array of meta.DynamicProperty items
         fieldNameCell = {}; % Cell-array of field names, to reduce run-time
+        bootDatenumUTC = NaN; % The datenum at boot, set by Ardupilog
     end
     properties (Access = public)
         type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
@@ -12,6 +13,7 @@ classdef LogMsgGroup < dynamicprops
     end
     properties (Dependent = true)
         TimeS; % Time in seconds since boot.
+        DatenumUTC; % MATLAB datenum of UTC Time at boot
     end
     methods
         function obj = LogMsgGroup(type_num, type_name, data_length, format_string, field_names_string)
@@ -138,6 +140,10 @@ classdef LogMsgGroup < dynamicprops
             obj.LineNo = LineNo;
         end
         
+        function [] = setBootDatenumUTC(obj, bootDatenumUTC)
+            obj.bootDatenumUTC = bootDatenumUTC;
+        end
+        
         function [] = verifyTypeLengths(obj)
             length = 0;
             for varType = obj.format
@@ -156,6 +162,10 @@ classdef LogMsgGroup < dynamicprops
             else
                 timeS = NaN(size(obj.LineNo));
             end
+        end
+        
+        function datenumUTC = get.DatenumUTC(obj)
+            datenumUTC = obj.bootDatenumUTC + obj.TimeS/60/60/24;
         end
     end
 end
