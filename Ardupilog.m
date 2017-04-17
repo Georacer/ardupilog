@@ -5,6 +5,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         platform % ArduPlane, ArduCopter etc
         version % Firmware version
         commit % Specific git commit
+        bootTimeUTC % String displaying time of boot in UTC
         totalLogMsgs = 0;
         % bootTime
         msgFilter = []; % Storage for the msgIds/msgNames desired for parsing
@@ -19,7 +20,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTID = 128;
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
-        boot_datenum_UTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
+        bootDatenumUTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
     end %properties
     
     methods
@@ -317,7 +318,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % something to figure it out from the log... for now, I'm neglecting it,
         % and assuming the GPS message was RECEIVED at it's TimeUS. (Note: the
         % truth is it was LOGGED at this time, not received)
-            if isprop(obj, 'GPS')
+            if isprop(obj, 'GPS') && ~isempty(obj.GPS.TimeUS)
                 % Get the time data from the log
                 recv_timeUS = obj.GPS.TimeUS(1);
                 recv_GWk = obj.GPS.GWk(1);
@@ -348,14 +349,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 leapseconds = sum(recv_gps_datenum > leap_second_table);
                 recv_utc_datenum = recv_gps_datenum - leapseconds/60/60/24;
                 % Record adjusted time to the log's property
-                obj.boot_datenum_UTC = recv_utc_datenum - recv_timeUS/1e6/60/60/24;
-                
-                %debug = true;
-                debug = false;
-                if debug
-                    disp(['Log began at UTC: ',datestr(obj.boot_datenum_UTC, 31)]);
-                end
+                obj.bootDatenumUTC = recv_utc_datenum - recv_timeUS/1e6/60/60/24;
 
+                % Put a human-readable version in the public properties
+                obj.bootTimeUTC = datestr(obj.bootDatenumUTC, 'yyyy-mm-dd HH:MM:SS');
+                %obj.bootTimeUTC = datestr(obj.bootDatenumUTC, 'yyyy-mm-dd HH:MM:SS.FFF');
             end                
         end
         
