@@ -8,11 +8,11 @@ classdef LogMsgGroup < dynamicprops
     properties (Access = public)
         type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
         name = ''; % Human readable name of msg group
-        % TimeRel % array of boot-relative time values
-        % Timestamp % array of time values
         LineNo = [];
     end
-    
+    properties (Dependent = true)
+        TimeS; % Time in seconds since boot.
+    end
     methods
         function obj = LogMsgGroup(type_num, type_name, data_length, format_string, field_names_string)
             if nargin == 0
@@ -148,6 +148,15 @@ classdef LogMsgGroup < dynamicprops
             end
         end
         
+        function timeS = get.TimeS(obj)
+            if isprop(obj, 'TimeUS')
+                timeS = obj.TimeUS/1e6;
+            elseif isprop(obj, 'TimeMS')
+                timeS = obj.TimeMS/1e3;
+            else
+                timeS = NaN(size(obj.LineNo));
+            end
+        end
     end
 end
 
