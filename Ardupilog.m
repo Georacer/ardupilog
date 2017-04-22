@@ -284,7 +284,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     info_row = strmatch(type{:},obj.MSG.Message);
                     if ~isempty(info_row)
                         obj.platform = type{:};
-                        fields_cell = strsplit(obj.MSG.Message(info_row,:));
+                        fields_cell = strsplit(obj.MSG.Message(info_row(1),:));
                         obj.version = fields_cell{1,2};
                         commit = trimTail(fields_cell{1,3});
                         obj.commit = commit(2:(end-1));
