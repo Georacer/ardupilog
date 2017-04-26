@@ -4,15 +4,17 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         format = ''; % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
         fieldInfo = []; % Array of meta.DynamicProperty items
         fieldNameCell = {}; % Cell-array of field names, to reduce run-time
+        bootDatenumUTC = NaN; % The datenum at boot, set by Ardupilog
     end
     properties (Access = public)
         type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
         name = ''; % Human readable name of msg group
-        % TimeRel % array of boot-relative time values
-        % Timestamp % array of time values
         LineNo = [];
     end
-    
+    properties (Dependent = true)
+        TimeS; % Time in seconds since boot.
+        DatenumUTC; % MATLAB datenum of UTC Time at boot
+    end
     methods
         function obj = LogMsgGroup(type_num, type_name, data_length, format_string, field_names_string)
             if nargin == 0
@@ -138,6 +140,10 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             obj.LineNo = LineNo;
         end
         
+        function [] = setBootDatenumUTC(obj, bootDatenumUTC)
+            obj.bootDatenumUTC = bootDatenumUTC;
+        end
+        
         function [] = verifyTypeLengths(obj)
             length = 0;
             for varType = obj.format
@@ -146,6 +152,20 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             if (length+3 ~= obj.data_len)
                 warning(sprintf('Incompatible declared message type length (%d) and format length (%d) in msg %d/%s',obj.data_len, length+3, obj.type, obj.name));
             end
+        end
+
+        function timeS = get.TimeS(obj)
+            if isprop(obj, 'TimeUS')
+                timeS = obj.TimeUS/1e6;
+            elseif isprop(obj, 'TimeMS')
+                timeS = obj.TimeMS/1e3;
+            else
+                timeS = NaN(size(obj.LineNo));
+            end
+        end
+        
+        function datenumUTC = get.DatenumUTC(obj)
+            datenumUTC = obj.bootDatenumUTC + obj.TimeS/60/60/24;
         end
 
         function [slice, remainder] = getSlice(obj, slice_values, slice_type)
@@ -207,7 +227,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
                 cpObj.(obj.fieldInfo(ndx).Name) = obj.(obj.fieldInfo(ndx).Name);
             end
         end
-    
+
     end
 end
 
