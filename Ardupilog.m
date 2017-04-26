@@ -307,6 +307,26 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             warning('Could not find the FMT message to extract its length. Leaving the default %d',obj.FMTLen);
             return;
         end
+        
+        function dump = getStruct(obj)
+           % Create a simple struct containing the information of the log
+           % without needing to include the Ardupilog class description
+           dump = struct();
+           props = properties(obj)';
+           % Copy all properties which are not LogMsgGroups
+           for i = 1:length(props)
+               propName = props{i};
+               if ~isa(obj.(propName),'LogMsgGroup') % This is not a LogMsgGroup
+                   dump.(propName) = obj.(propName);
+               else % This is a LogMsgGroup
+                   subProps = properties(obj.(propName));
+                   for j = 1:length(subProps)
+                       subPropName = subProps{j};
+                       dump.(propName).(subPropName) = obj.(propName).(subPropName);
+                   end
+               end
+           end
+        end
 
     end %methods
 end %classdef Ardupilog
