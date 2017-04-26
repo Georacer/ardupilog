@@ -72,7 +72,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             %  message filtering.
             if ~isnan(obj.bootDatenumUTC)
                 for prop = properties(obj)'
-                    if ismethod(obj.(prop{1}), 'setBootDatenumUTC')
+                    if isa(obj.(prop{1}), 'LogMsgGroup')
                         obj.(prop{1}).setBootDatenumUTC(obj.bootDatenumUTC);
                     end
                 end
@@ -338,6 +338,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 recv_GWk = obj.GPS.GWk(1);
                 recv_GMS = obj.GPS.GMS(1);
                 % Calculate the gps-time datenum
+                %  Ref: http://www.oc.nps.edu/oc2902w/gps/timsys.html
+                %  Ref: https://confluence.qps.nl/display/KBE/UTC+to+GPS+Time+Correction
                 gps_zero_datenum = datenum('1980-01-06 00:00:00.000','yyyy-mm-dd HH:MM:SS.FFF');
                 days_since_gps_zero = recv_GWk*7 + recv_GMS/1e3/60/60/24;
                 recv_gps_datenum = gps_zero_datenum + days_since_gps_zero;
