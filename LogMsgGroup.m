@@ -1,4 +1,4 @@
-classdef LogMsgGroup < dynamicprops
+classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
     properties (Access = private)
         data_len = 0; % Len of data portion for this message (neglecting 2-byte header + 1-byte ID)
         format = ''; % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
@@ -153,7 +153,7 @@ classdef LogMsgGroup < dynamicprops
                 warning(sprintf('Incompatible declared message type length (%d) and format length (%d) in msg %d/%s',obj.data_len, length+3, obj.type, obj.name));
             end
         end
-        
+
         function timeS = get.TimeS(obj)
             if isprop(obj, 'TimeUS')
                 timeS = obj.TimeUS/1e6;
@@ -167,6 +167,67 @@ classdef LogMsgGroup < dynamicprops
         function datenumUTC = get.DatenumUTC(obj)
             datenumUTC = obj.bootDatenumUTC + obj.TimeS/60/60/24;
         end
+
+        function [slice, remainder] = getSlice(obj, slice_values, slice_type)
+        % This returns an indexed portion (a "slice") of a LogMsgGroup
+        % Example:
+        %    cruise_gps_msgs = GPS.getSlice([t_begin_cruise, t_end_cruise], 'TimeUS')
+        %  will return a smaller LogMsgGroup than GPS, only containing data
+        %  between TimeUS values greater than t_begin_cruise and less than
+        %  t_end_cruise.
+
+            if isprop(obj, slice_type)
+                % Find indices corresponding to slice_values, from slice_type
+                switch slice_type
+                  case 'LineNo'
+                    start_ndx = find(obj.LineNo >= slice_values(1),1,'first');
+                    end_ndx = find(obj.LineNo <= slice_values(2),1,'last');
+                  case 'TimeUS'
+                    start_ndx = find(obj.TimeUS >= slice_values(1),1,'first');
+                    end_ndx = find(obj.TimeUS <= slice_values(2),1,'last');
+                  otherwise
+                    error(['Unsupported slice type: ', slice_type]);
+                end
+                slice_ndx = [start_ndx:1:end_ndx];
+            else
+                slice_ndx = [];
+            end
+
+            % If the slice is not valid, return an empty LogMsgGroup
+            if isempty(slice_ndx)
+                slice = LogMsgGroup.empty();
+                return
+            end
+            
+            % Create the slice as a new LogMsgGroup
+            field_names_string = strjoin(obj.fieldNameCell,',');
+            slice = LogMsgGroup(obj.type, obj.name, obj.data_len, obj.format, field_names_string);
+            % For each data field, copy the slice of data, identified by slice_ndx
+            for field_name = slice.fieldNameCell
+                slice.(field_name{1}) = obj.(field_name{1})(slice_ndx);
+            end
+            % Copy also the LineNo slice
+            slice.setLineNo(obj.LineNo(slice_ndx));
+        end
+    end
+    methods(Access=protected)
+        function cpObj = copyElement(obj)
+        % Makes copy() into a "deep copy" method (i.e. when copying
+        % a LogMsgGroup, the new copy also has all the data stored
+        % in dynamic-property fields (e.g. TimeUS))
+            
+            % Create a standard copy (to copy non-dynamic properties)
+            cpObj = copyElement@matlab.mixin.Copyable(obj);
+            
+            % Deep-copy the Dynamic Properties
+            for ndx = 1:length(obj.fieldInfo)
+                % Create a new dynamic property in the copy
+                cpObj.fieldInfo(ndx) = addprop(cpObj, obj.fieldInfo(ndx).Name);
+                % Copy the data from the original
+                cpObj.(obj.fieldInfo(ndx).Name) = obj.(obj.fieldInfo(ndx).Name);
+            end
+        end
+
     end
 end
 
