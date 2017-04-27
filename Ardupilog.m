@@ -21,7 +21,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
         bootDatenumUTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
-        logMsgGroups = []; % Array of meta.DynamicProperty items, which will be LogMsgGroups
 
     end %properties
     
@@ -278,13 +277,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 newFmt = char(trimTail(msgData(7:22)));
                 newLabels = char(trimTail(msgData(23:86)));
                 
-                % Create dynamic property of Ardupilog with newName, and add to logMsgGroups array
-                if isempty(obj.logMsgGroups)
-                    obj.logMsgGroups = addprop(obj, newName);
-                else
-                    obj.logMsgGroups(end+1) = addprop(obj, newName);
-                end
-                
                 % Instantiate LogMsgGroup class named newName, process FMT data
                 obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
                
@@ -427,20 +419,22 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             slice.numMsgs = 0;
             
             % Loop through the LogMsgGroups, slicing each one
-            for msgGroup = slice.logMsgGroups
-                % If the LogMsgGroup has been deleted, skip it
-                if ~isvalid(msgGroup)
-                    continue
+            logProps = properties(obj);
+            for i = 1:length(logProps)
+                propertyName = logProps{i}; % Get the name of the property under examination
+                % We are interested only in LogMsgGroup objects, skip the rest of the properties
+                if ~isa(obj.(propertyName),'LogMsgGroup') 
+                    continue;
                 end
                 
                 % Slice the LogMsgGroup
-                lmg_slice = slice.(msgGroup.Name).getSlice(slice_values, slice_type);
+                lmg_slice = slice.(propertyName).getSlice(slice_values, slice_type);
                 % If the slice is not empty, add it to the Ardupilog slice
                 if isempty(lmg_slice)
-                    delete(msgGroup)
+                    delete(slice.(propertyName))
                 else
-                    slice.(msgGroup.Name) = lmg_slice;
-                    slice.numMsgs = slice.numMsgs + size(slice.(msgGroup.Name).LineNo, 1);
+                    slice.(propertyName) = lmg_slice;
+                    slice.numMsgs = slice.numMsgs + size(slice.(propertyName).LineNo, 1);
                 end
             end
         end
