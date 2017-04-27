@@ -185,11 +185,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 
                 % Check if this message was meant to be filtered
                 if iscellstr(obj.msgFilter)
-                    if ~ismember(msgName,obj.msgFilter)
+                    if ismember(msgName,obj.msgFilter)
                         continue;
                     end
                 elseif isnumeric(obj.msgFilter)
-                    if ~ismember(msgId,obj.msgFilter)
+                    if ismember(msgId,obj.msgFilter)
                         continue;
                     end
                 else
@@ -482,8 +482,73 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     newlog.(propertyName) = obj.(propertyName);
                 end
             end
-        end        
-        obj = newlog;
+        end
+        end
+        
+        function newlog = filterMsgs(obj,msgFilter)
+        % Filter message groups in existing Ardupilog
+        
+        % Get the logMsgGroups names and ids
+        msgNames = {};
+        msgIds = [];
+        propNames = properties(obj);
+        for i=1:length(propNames)
+            propName = propNames{i};
+            if isa(obj.(propName),'LogMsgGroup')
+                msgNames{end+1} = propName;
+                msgIds(end+1) = obj.(propName).type;
+            end
+        end
+        
+        % Check for validity of the input msgFilter
+        if ~isempty(msgFilter)
+            if iscellstr(msgFilter) %obj.msgFilter is a cell-array of strings
+                invalid = find(ismember(msgFilter,msgNames)==0);
+                for i=1:length(invalid)
+                    warning('Invalid element in provided message filter: %s',msgFilter{invalid(i)});
+                end
+            else %msgFilter is an array of msgId's
+                invalid = find(ismember(msgFilter,msgIds)==0);
+                for i=1:length(invalid)
+                    warning('Invalid element in provided message filter: %d',msgFilter(invalid(i)));
+                end
+            end
+        end
+        
+        newlog = copy(obj); % Create the new log object
+        newlog.msgFilter = msgFilter;
+        % Set the LineNos of any messages due for deletion to empty
+        propertyNames = properties(newlog);
+        for i = 1:length(propertyNames)
+            propertyName = propertyNames{i};
+            if isa(newlog.(propertyName),'LogMsgGroup'); % For each message group
+                msgId = newlog.(propertyName).type;
+                if iscellstr(newlog.msgFilter)
+                    if ~ismember(propertyName,newlog.msgFilter)
+                        newlog.(propertyName).LineNo = []; % Mark the message group for deletion
+                    end
+                elseif isnumeric(newlog.msgFilter)
+                    if ~ismember(msgId,newlog.msgFilter)
+                        newlog.(propertyName).LineNo = []; % Mark the message group for deletion
+                    end
+                else
+                    error('msgFilter type should have passed validation by now and I shouldnt be here');
+                end
+            end
+        end
+        
+        newlog = newlog.deleteEmptyMsgs();  
+        
+        % Update the number of actual included messages
+        newlog.numMsgs = 0;
+        propNames = properties(newlog);
+        for i = 1:length(propNames)
+            propName = propNames{i};
+            if isa(newlog.(propName),'LogMsgGroup')
+                newlog.numMsgs = newlog.numMsgs + length(newlog.(propName).LineNo);
+            end
+        end
+        
         end
         
     end
