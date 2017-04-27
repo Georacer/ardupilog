@@ -446,22 +446,26 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
         
     end
+    
     methods(Access=protected)
-        function cpObj = copyElement(obj)
-        % Makes copy() into a "deep copy" method (i.e. when copying an Ardupilog, the
-        % new copy also has all the data stored in dynamic-property LogMsgGroups)
-            
-            % Create a standard copy (to copy all properties)
-            cpObj = copyElement@matlab.mixin.Copyable(obj);
-            
-            % Deep-copy the Dynamic Properties
-            for ndx = 1:length(obj.logMsgGroups)
-                % Create a new dynamic property
-                cpObj.logMsgGroups(ndx) = addprop(cpObj, obj.logMsgGroups(ndx).Name);
-                % Copy the data from the original
-                cpObj.(obj.logMsgGroups(ndx).Name) = copy(obj.(obj.logMsgGroups(ndx).Name));
+        
+        function newObj = copyElement(obj)
+        % Copy function - replacement for matlab.mixin.Copyable.copy() to create object copies
+        % Found from somewhere in the internet
+            try
+                % R2010b or newer - directly in memory (faster)
+                objByteArray = getByteStreamFromArray(obj);
+                newObj = getArrayFromByteStream(objByteArray);
+            catch
+                % R2010a or earlier - serialize via temp file (slower)
+                fname = [tempname '.mat'];
+                save(fname, 'obj');
+                newObj = load(fname);
+                newObj = newObj.obj;
+                delete(fname);
             end
         end
+        
     end %methods
 end %classdef Ardupilog
 
