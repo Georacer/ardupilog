@@ -7,7 +7,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         commit % Specific git commit
         bootTimeUTC % String displaying time of boot in UTC
         totalLogMsgs = 0;
-        % bootTime
         msgFilter = []; % Storage for the msgIds/msgNames desired for parsing
         numMsgs = 0;
     end
@@ -26,31 +25,32 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     end %properties
     
     methods
-        function obj = Ardupilog(pathAndFileName,msgFilter)
-            if nargin == 0
+        function obj = Ardupilog(varargin)
+            
+            % Setup argument parser
+            p = inputParser;
+            addOptional(p,'path',[],@(x) isstr(x)||isempty(x) );
+            addOptional(p,'msgFilter',[],@(x) isnumeric(x)||iscellstr(x) );
+            parse(p,varargin{:});
+   
+            % Decide on initialization method
+            if strcmp(p.Results.path,'~') % We just want to create a bare Ardupilog object
+                return;
+            end
+            
+            if isempty(p.Results.path)
                 % If constructor is empty, prompt user for log file
                 [filename, filepathname, ~] = uigetfile('*.bin','Select binary (.bin) log-file');
                 obj.fileName = filename;
                 obj.filePathName = filepathname;
             else
                 % Use user-specified log file
-                [filepathname, filename, extension] = fileparts(which(pathAndFileName));
+                [filepathname, filename, extension] = fileparts(which(p.Results.path));
                 obj.filePathName = filepathname;
                 obj.fileName = [filename, extension];
             end
             
-            % Check for the existence of message filters
-            if nargin>=2 % msgFilter argument given
-                if ~isempty(msgFilter)
-                    if iscellstr(msgFilter) % msgFilter is cell of strings (msgNames)
-                        obj.msgFilter = msgFilter;
-                    elseif isnumeric(msgFilter) % msgFilter is numeric array (msgIDs)
-                        obj.msgFilter = msgFilter;
-                    else
-                        error('msgFilter input argument invalid. Cell of strings or array accepted');
-                    end
-                end
-            end
+            obj.msgFilter = p.Results.msgFilter; % Store the message filter
 
             % If user pressed "cancel" then return without trying to process
             if all(obj.fileName == 0) && all(obj.filePathName == 0)
@@ -86,7 +86,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             obj.fmt_type_mat = [];
             obj.valid_msgheader_cell = cell(0);
         end
-        
+               
         function delete(obj)
             % Probably won't ever be open, but close the file just in case
             if ~isempty(fopen('all')) && any(fopen('all')==obj.fileID)
