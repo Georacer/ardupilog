@@ -169,8 +169,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 
                 % If message not filtered, store it
                 obj.(msgName).storeData(data');
-                % Add to number of msgs in Ardupilog
-                obj.numMsgs = obj.numMsgs + size(data, 2);
             end
             
             % Construct the LineNo for the whole log
@@ -178,12 +176,25 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             LineNo_vec = [1:length(LineNo_ndx_vec)]';
             % Record the total number of log messages
             obj.totalLogMsgs = LineNo_vec(end);
-            % For each LogMsgGroup which wasn't filtered
+            % Iterate over all the messages
             for i = 1:size(obj.valid_msgheader_cell,1)
                 % Find msgName from msgId in 1st column
                 msgId = obj.valid_msgheader_cell{i,1};
                 row_in_fmt_cell = vertcat(obj.fmt_cell{:,1})==msgId;
                 msgName = obj.fmt_cell{row_in_fmt_cell,2};
+                
+                % Check if this message was meant to be filtered
+                if iscellstr(obj.msgFilter)
+                    if ~ismember(msgName,obj.msgFilter)
+                        continue;
+                    end
+                elseif isnumeric(obj.msgFilter)
+                    if ~ismember(msgId,obj.msgFilter)
+                        continue;
+                    end
+                else
+                    error('msgFilter type should have passed validation by now and I shouldnt be here');
+                end
 
                 % Pick out the correct line numbers
                 msg_LineNo = LineNo_vec(ismember(LineNo_ndx_vec, obj.valid_msgheader_cell{i,2}));
@@ -191,7 +202,16 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 % Write to the LogMsgGroup
                 obj.(msgName).setLineNo(msg_LineNo);
             end
-
+            
+            % Update the number of actual included messages
+            propNames = properties(obj);
+            for i = 1:length(propNames)
+                propName = propNames{i};
+                if isa(obj.(propName),'LogMsgGroup')
+                    obj.numMsgs = obj.numMsgs + length(obj.(propName).LineNo);
+                end
+            end
+            
             % Display message on completion
             disp('Done processing.');
         end
@@ -298,8 +318,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             FMTName = obj.fmt_cell{fmt_ndx, 2};
             % Store msgData correctly in that LogMsgGroup
             obj.(FMTName).storeData(data);
-            % Add to number of msgs in Ardupilog
-            obj.numMsgs = obj.numMsgs + size(data, 1);
         end
         
         function [] = findInfo(obj)
@@ -443,6 +461,29 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     slice.numMsgs = slice.numMsgs + size(slice.(msgGroup.Name).LineNo, 1);
                 end
             end
+        end
+        
+        function newlog = deleteEmptyMsgs(obj)
+        % Delete any logMsgGroups which are empty
+        % Implemented by creating a new object and copying non-empty msgs
+        % because once created, properties cannot be deleted
+        newlog = Ardupilog('~'); % Create a new emtpy log
+        
+        propertyNames = properties(obj);
+        for i = 1:length(propertyNames)
+            propertyName = propertyNames{i};
+            if ~isa(obj.(propertyName),'LogMsgGroup'); % Copy anything else except LogMsgGroups
+                newlog.(propertyName) = obj.(propertyName);
+            else % Check if the LogMsgGroup is emtpy
+                if isempty(obj.(propertyName).LineNo) % Choosing a field which will always exist
+                    % Do nothing
+                else
+                    addprop(newlog, propertyName);
+                    newlog.(propertyName) = obj.(propertyName);
+                end
+            end
+        end        
+        obj = newlog;
         end
         
     end
