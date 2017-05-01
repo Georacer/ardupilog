@@ -278,6 +278,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 newLabels = char(trimTail(msgData(23:86)));
                 
                 % Instantiate LogMsgGroup class named newName, process FMT data
+                addprop(obj, newName);
                 obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
                
                 % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
