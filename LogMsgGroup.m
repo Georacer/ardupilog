@@ -194,17 +194,24 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             end
 
             % If the slice is not valid, return an empty LogMsgGroup
+            % HGM TODO: We need to improve this validity-checking. For instance, what if the slice_ndx is negative? That's not valid
             if isempty(slice_ndx)
                 slice = LogMsgGroup.empty();
                 return
             end
+            % End HGM TODO
             
             % Create the slice as a new LogMsgGroup
             field_names_string = strjoin(obj.fieldNameCell,',');
             slice = LogMsgGroup(obj.type, obj.name, obj.data_len, obj.format, field_names_string);
             % For each data field, copy the slice of data, identified by slice_ndx
             for field_name = slice.fieldNameCell
-                slice.(field_name{1}) = obj.(field_name{1})(slice_ndx);
+                % HGM: The following is valid for 1-dim and 2-dim fields.
+                % - Should we extend to n-dim fields?
+                % - If yes, is there a standard way to do this?
+                % -- one approach: Could build string_statement from ndims() and repeating ',:' ndims()-1 times, then calling with eval(string_statement)
+                % -- MATLAB, or the community, might already have this solved
+                slice.(field_name{1}) = obj.(field_name{1})(slice_ndx,:);
             end
             % Copy also the LineNo slice and set the bootDatenum
             slice.setLineNo(obj.LineNo(slice_ndx));
