@@ -21,7 +21,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
         bootDatenumUTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
-        logMsgGroups = []; % Array of meta.DynamicProperty items, which will be LogMsgGroups
 
     end %properties
     
@@ -278,14 +277,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 newFmt = char(trimTail(msgData(7:22)));
                 newLabels = char(trimTail(msgData(23:86)));
                 
-                % Create dynamic property of Ardupilog with newName, and add to logMsgGroups array
-                if isempty(obj.logMsgGroups)
-                    obj.logMsgGroups = addprop(obj, newName);
-                else
-                    obj.logMsgGroups(end+1) = addprop(obj, newName);
-                end
-                
                 % Instantiate LogMsgGroup class named newName, process FMT data
+                addprop(obj, newName);
                 obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
                
                 % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
@@ -427,41 +420,47 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             slice.numMsgs = 0;
             
             % Loop through the LogMsgGroups, slicing each one
-            for msgGroup = slice.logMsgGroups
-                % If the LogMsgGroup has been deleted, skip it
-                if ~isvalid(msgGroup)
-                    continue
+            logProps = properties(obj);
+            for i = 1:length(logProps)
+                propertyName = logProps{i}; % Get the name of the property under examination
+                % We are interested only in LogMsgGroup objects, skip the rest of the properties
+                if ~isa(obj.(propertyName),'LogMsgGroup') 
+                    continue;
                 end
                 
                 % Slice the LogMsgGroup
-                lmg_slice = slice.(msgGroup.Name).getSlice(slice_values, slice_type);
+                lmg_slice = slice.(propertyName).getSlice(slice_values, slice_type);
                 % If the slice is not empty, add it to the Ardupilog slice
                 if isempty(lmg_slice)
-                    delete(msgGroup)
+                    delete(slice.(propertyName))
                 else
-                    slice.(msgGroup.Name) = lmg_slice;
-                    slice.numMsgs = slice.numMsgs + size(slice.(msgGroup.Name).LineNo, 1);
+                    slice.(propertyName) = lmg_slice;
+                    slice.numMsgs = slice.numMsgs + size(slice.(propertyName).LineNo, 1);
                 end
             end
         end
         
     end
+    
     methods(Access=protected)
-        function cpObj = copyElement(obj)
-        % Makes copy() into a "deep copy" method (i.e. when copying an Ardupilog, the
-        % new copy also has all the data stored in dynamic-property LogMsgGroups)
-            
-            % Create a standard copy (to copy all properties)
-            cpObj = copyElement@matlab.mixin.Copyable(obj);
-            
-            % Deep-copy the Dynamic Properties
-            for ndx = 1:length(obj.logMsgGroups)
-                % Create a new dynamic property
-                cpObj.logMsgGroups(ndx) = addprop(cpObj, obj.logMsgGroups(ndx).Name);
-                % Copy the data from the original
-                cpObj.(obj.logMsgGroups(ndx).Name) = copy(obj.(obj.logMsgGroups(ndx).Name));
+        
+        function newObj = copyElement(obj)
+        % Copy function - replacement for matlab.mixin.Copyable.copy() to create object copies
+        % Found from somewhere in the internet
+            try
+                % R2010b or newer - directly in memory (faster)
+                objByteArray = getByteStreamFromArray(obj);
+                newObj = getArrayFromByteStream(objByteArray);
+            catch
+                % R2010a or earlier - serialize via temp file (slower)
+                fname = [tempname '.mat'];
+                save(fname, 'obj');
+                newObj = load(fname);
+                newObj = newObj.obj;
+                delete(fname);
             end
         end
+        
     end %methods
 end %classdef Ardupilog
 
