@@ -185,11 +185,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 
                 % Check if this message was meant to be filtered
                 if iscellstr(obj.msgFilter)
-                    if ismember(msgName,obj.msgFilter)
+                    if ~isempty(obj.msgFilter) && ~ismember(msgName,obj.msgFilter)
                         continue;
                     end
                 elseif isnumeric(obj.msgFilter)
-                    if ismember(msgId,obj.msgFilter)
+                    if ~isempty(obj.msgFilter) && ~ismember(msgId,obj.msgFilter)
                         continue;
                     end
                 else
