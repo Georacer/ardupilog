@@ -50,6 +50,23 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         end
 
         function [] = storeData(obj, data)
+        % Store the message data (from the data matrix) into the
+        % appropriate fields based on the column ordering.
+
+            % First, assert that the length(obj.format) == numel(obj.fieldNameCell)
+            if length(obj.format) > numel(obj.fieldNameCell)
+                warning([obj.name, ' format string ', obj.format,...
+                         ' has more (char) elements than defined fields. ',...
+                         'Only using the first ', num2str(numel(obj.fieldNameCell)),...
+                         ': ', obj.format(1:numel(obj.fieldNameCell))]);
+            end
+            if length(obj.format) < numel(obj.fieldNameCell)
+                error([obj.name, ' format string: ', obj.format, ' with length ',...
+                       num2str(length(obj.format)), ' does not provide (char)',...
+                       ' formats for all ', num2str(numel(obj.fieldNameCell)),...
+                       ' field names (in fieldNameCell)'])
+            end
+
             % Format and store the msgData appropriately
             columnIndex = 1;
             for field_ndx = 1:length(obj.fieldInfo)
