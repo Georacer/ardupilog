@@ -166,12 +166,12 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             % the sum of the lengths of each (char) format type. (e.g. for 'bbQQ'
             % since 'b'=int8=1byte, 'Q'=uint64=8bytes, the correct length would be
             % 1+1+8+8=18)
-            length = 0;
+            length_sum = 0;
             for varType = obj.format
-                length = length + formatLength(varType);
+                length_sum = length_sum + formatLength(varType);
             end
-            if (length+3 ~= obj.data_len)
-                warning(sprintf('Incompatible declared message type length (%d) and format length (%d) in msg %d/%s',obj.data_len, length+3, obj.type, obj.name));
+            if (length_sum+3 ~= obj.data_len)
+                warning(sprintf('Incompatible declared message type length (%d) and format length (%d) in msg %d/%s',obj.data_len, length_sum+3, obj.type, obj.name));
             end
         end
 
