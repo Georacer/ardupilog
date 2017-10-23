@@ -5,6 +5,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         fieldInfo = []; % Array of meta.DynamicProperty items
         fieldNameCell = {}; % Cell-array of field names, to reduce run-time
         bootDatenumUTC = NaN; % The datenum at boot, set by Ardupilog
+        alphaPrefix = 'f'; % Character prefix for validating property labels starting from a digit
     end
     properties (Access = public)
         type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
@@ -28,11 +29,15 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             obj.fieldNameCell = strsplit(field_names_string,',');
             % For each of the fields
             for ndx = 1:length(obj.fieldNameCell)
+                fieldNameStr = obj.fieldNameCell{ndx};
+                if isstrprop(fieldNameStr(1),'digit') % Check if first label is a digit
+                    fieldNameStr = strcat(obj.alphaPrefix,fieldNameStr); % Add a alphabetic character as prefix
+                end
                 % Create a dynamic property with field name, and add to fieldInfo array
                 if isempty(obj.fieldInfo)
-                    obj.fieldInfo = addprop(obj, obj.fieldNameCell{ndx});
+                    obj.fieldInfo = addprop(obj, fieldNameStr);
                 else
-                    obj.fieldInfo(end+1) = addprop(obj, obj.fieldNameCell{ndx});
+                    obj.fieldInfo(end+1) = addprop(obj, fieldNameStr);
                 end
                 
                 % Put field format char (e.g. Q, c, b, h, etc.) into 'Description' field
@@ -58,6 +63,9 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             for field_ndx = 1:length(obj.fieldInfo)
                 % Find corresponding field name
                 field_name_string = obj.fieldNameCell{field_ndx};
+                if isstrprop(field_name_string(1),'digit') % Check if first label is a digit
+                    field_name_string = strcat(obj.alphaPrefix,field_name_string); % Add a alphabetic character as prefix
+                end
                 % select-and-format fieldData
                 switch obj.fieldInfo(field_ndx).Description
                   case 'b' % int8_t
