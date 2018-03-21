@@ -25,6 +25,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     
     methods
         function obj = Ardupilog(varargin)
+        % TODO: Write a (usage) help message here. User sees this
+        % when typing "help Ardupilog" at the matlab prompt.
             
             % Setup argument parser
             p = inputParser;
