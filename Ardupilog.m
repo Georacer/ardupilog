@@ -31,7 +31,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             addOptional(p,'path',[],@(x) isstr(x)||isempty(x) );
             addOptional(p,'msgFilter',[],@(x) isnumeric(x)||iscellstr(x) );
             parse(p,varargin{:});
-   
+
             % Decide on initialization method
             if strcmp(p.Results.path,'~') % We just want to create a bare Ardupilog object
                 return;
@@ -44,11 +44,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.filePathName = filepathname;
             else
                 % Use user-specified log file
-                [filepathname, filename, extension] = fileparts(which(p.Results.path));
+                %[filepathname, filename, extension] = fileparts(which(p.Results.path));
+                [filepathname, filename, extension] = fileparts(p.Results.path);
                 obj.filePathName = filepathname;
                 obj.fileName = [filename, extension];
             end
-            
+
             obj.msgFilter = p.Results.msgFilter; % Store the message filter
 
             % If user pressed "cancel" then return without trying to process
@@ -287,24 +288,29 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         
         function [] = createLogMsgGroups(obj,data)
             for i=1:size(data,1)
-                % Process FMT message to create a new dynamic property
-                msgData = data(i,:);
-                
-                newType = double(msgData(1));
-                newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
-                
-                newName = char(trimTail(msgData(3:6)));
-                newFmt = char(trimTail(msgData(7:22)));
-                newLabels = char(trimTail(msgData(23:86)));
-                
-                % Instantiate LogMsgGroup class named newName, process FMT data
-                addprop(obj, newName);
-                obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
-               
-                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
-                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
-                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
-                
+                try
+                    % Process FMT message to create a new dynamic property
+                    msgData = data(i,:);
+                    
+                    newType = double(msgData(1));
+                    newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
+                    
+                    newName = char(trimTail(msgData(3:6)));
+                    newFmt = char(trimTail(msgData(7:22)));
+                    newLabels = char(trimTail(msgData(23:86)));
+                    
+                    % Instantiate LogMsgGroup class named newName, process FMT data
+                    addprop(obj, newName);
+                    obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
+                    
+                    % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                    obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
+                    obj.fmt_type_mat = [obj.fmt_type_mat; newType];
+                catch
+                    warning(['LogMsgGroup specification problem in ' ...
+                             'FMT definition, i=', num2str(i),'. ' ...
+                             'Skipping!'])
+                end
             end
             % msgName needs to be FMT
             fmt_ndx = find(obj.fmt_type_mat == 128);
@@ -350,11 +356,42 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % something to figure it out from the log... for now, I'm neglecting it,
         % and assuming the GPS message was RECEIVED at it's TimeUS. (Note: the
         % truth is it was LOGGED at this time, not received)
-            if isprop(obj, 'GPS') && ~isempty(obj.GPS.TimeUS)
+            
+        % HGM HACK: 3DR SOLO might have TimeMS instead of TimeUS...
+        if isprop(obj.GPS, 'TimeUS')
+            timestr = 'TimeUS';
+            timeconvert = 1;
+        elseif isprop(obj.GPS, 'TimeMS')
+            timestr = 'TimeMS';
+            timeconvert = 1e3;
+        else
+            error('Unsupported time in obj.GPS')
+        end
+
+        if isprop(obj.GPS, 'GWk')
+            wkstr = 'GWk';
+        elseif isprop(obj.GPS, 'Week')
+            wkstr = 'Week';
+        else
+            error('Unsupported week-type in obj.GPS')
+        end
+
+        if isprop(obj.GPS, 'GMS')
+            gpssecstr = 'GMS';
+        elseif isprop(obj.GPS, 'T')
+            gpssecstr = 'T';
+        else
+            error('Unsupported GPS-seconds-type in obj.GPS')
+        end
+
+            if isprop(obj, 'GPS') && ~isempty(obj.GPS.(timestr))
                 % Get the time data from the log
-                recv_timeUS = obj.GPS.TimeUS(1);
-                recv_GWk = obj.GPS.GWk(1);
-                recv_GMS = obj.GPS.GMS(1);
+                temp = obj.GPS.(timestr);
+                recv_timeUS = temp(1)*timeconvert;
+                temp = obj.GPS.(wkstr);
+                recv_GWk = temp(1);
+                temp = obj.GPS.(gpssecstr);
+                recv_GMS = temp(1);
                 % Calculate the gps-time datenum
                 %  Ref: http://www.oc.nps.edu/oc2902w/gps/timsys.html
                 %  Ref: https://confluence.qps.nl/display/KBE/UTC+to+GPS+Time+Correction
