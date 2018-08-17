@@ -68,6 +68,10 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
                 end
                 % select-and-format fieldData
                 switch obj.fieldInfo(field_ndx).Description
+                  case 'a' % int16_t[32]
+                    fieldLen = 2*32;
+                    tempArray = reshape(data(:,columnIndex-1 +(1:fieldLen))',1,[]);
+                    obj.(field_name_string) = double(reshape(typecast(uint8(tempArray),'int16'), [], 32));
                   case 'b' % int8_t
                     fieldLen = 1;
                     obj.(field_name_string) = double(typecast(data(:,columnIndex-1 +(1:fieldLen)),'int8'));
@@ -271,6 +275,8 @@ end
 function len = formatLength(varType)
 % FORMATLENGTH return the size of the input variable type as designated
 switch varType
+    case 'a' % int16_t[32] (array of 32 int16_t's)
+        len = 2*32;
     case 'b' % int8_t
         len = 1;
     case 'B' % uint8_t
@@ -316,6 +322,7 @@ end
 end
 
 % Format characters in the format string for binary log messages
+%   a   : int16_t[32] (array of 32 int16_t's)
 %   b   : int8_t
 %   B   : uint8_t
 %   h   : int16_t
