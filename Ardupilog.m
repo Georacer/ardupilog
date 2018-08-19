@@ -572,7 +572,7 @@ end %classdef Ardupilog
 
 function string = trimTail(string)
 % Remove any trailing space (zero-chars)
-    while string(end)==0
+    while ~isempty(string) && string(end)==0
         string(end) = [];
     end
 end
