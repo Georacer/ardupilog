@@ -110,7 +110,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             obj.log_data = fread(obj.fileID, [1, readsize], '*uchar'); % Read the datafile entirely
 
             % Close the file
-            if fclose(obj.fileID) == 0;
+            if fclose(obj.fileID) == 0
                 obj.fileID = -1;
             else
                 warn('File not closed successfully')
@@ -288,29 +288,29 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         
         function [] = createLogMsgGroups(obj,data)
             for i=1:size(data,1)
-                try
-                    % Process FMT message to create a new dynamic property
-                    msgData = data(i,:);
-                    
-                    newType = double(msgData(1));
-                    newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
-                    
-                    newName = char(trimTail(msgData(3:6)));
-                    newFmt = char(trimTail(msgData(7:22)));
-                    newLabels = char(trimTail(msgData(23:86)));
-                    
-                    % Instantiate LogMsgGroup class named newName, process FMT data
+                % Process FMT message to create a new dynamic property
+                msgData = data(i,:);
+                
+                newType = double(msgData(1));
+                newLen = double(msgData(2)); % Note: this is header+ID+dataLen = length(header)+1+dataLen.
+                
+                newName = char(trimTail(msgData(3:6)));
+                newFmt = char(trimTail(msgData(7:22)));
+                newLabels = char(trimTail(msgData(23:86)));
+                
+                % Instantiate LogMsgGroup class named newName, process FMT data
+                new_msg_group = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
+                if isempty(new_msg_group)
+                    warning('Msg group %d/%s could not be created', newType, newName);
+                else
                     addprop(obj, newName);
-                    obj.(newName) = LogMsgGroup(newType, newName, newLen, newFmt, newLabels);
-                    
-                    % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
-                    obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
-                    obj.fmt_type_mat = [obj.fmt_type_mat; newType];
-                catch
-                    warning(['LogMsgGroup specification problem in ' ...
-                             'FMT definition, i=', num2str(i),'. ' ...
-                             'Skipping!'])
+                    obj.(newName) = new_msg_group;
                 end
+               
+                % Add to obj.fmt_cell and obj.fmt_type_mat (for increased speed)
+                obj.fmt_cell = [obj.fmt_cell; {newType, newName, newLen}];
+                obj.fmt_type_mat = [obj.fmt_type_mat; newType];
+                
             end
             % msgName needs to be FMT
             fmt_ndx = find(obj.fmt_type_mat == 128);
@@ -609,6 +609,11 @@ end %classdef Ardupilog
 
 function string = trimTail(string)
 % Remove any trailing space (zero-chars)
+    % Test if string is all zeroes
+    if ~any(string)
+        string = [];
+        return;
+    end
     while string(end)==0
         string(end) = [];
     end

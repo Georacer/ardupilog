@@ -26,7 +26,19 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         end
         
         function [] = storeFormat(obj, type_num, type_name, data_length, format_string, field_names_string)
-            obj.fieldNameCell = strsplit(field_names_string,',');
+            if isempty(field_names_string)
+                obj.fieldNameCell = {};
+            else
+                obj.fieldNameCell = strsplit(field_names_string,',');
+            end
+            
+            % Verify that format and labels agree
+            if length(format_string)~=length(obj.fieldNameCell)
+                warning('incompatible data on msg type=%d/%s', type_num, type_name);
+                obj = []; % Clear the instance and return %TODO this is kind of messy
+                return
+            end
+            
             % For each of the fields
             for ndx = 1:length(obj.fieldNameCell)
                 fieldNameStr = obj.fieldNameCell{ndx};
