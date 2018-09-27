@@ -8,7 +8,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         alphaPrefix = 'f'; % Character prefix for validating property labels starting from a digit
     end
     properties (Access = public)
-        type = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
+        typeNumID = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
         name = ''; % Human readable name of msg group
         LineNo = [];
     end
@@ -45,7 +45,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             end
 
             % Save FMT data into private properties (Not actually used anywhere?)
-            obj.type = type_num;
+            obj.typeNumID = type_num;
             obj.name = type_name;
             obj.data_len = data_length;
             obj.format = format_string;
@@ -179,7 +179,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
                 length_sum = length_sum + formatLength(varType);
             end
             if (length_sum+3 ~= obj.data_len)
-                warning(sprintf('Incompatible declared message type length (%d) and format length (%d) in msg %d/%s',obj.data_len, length_sum+3, obj.type, obj.name));
+                warning(sprintf('Incompatible declared message type length (%d) and format length (%d) in msg %d/%s',obj.data_len, length_sum+3, obj.typeNumID, obj.name));
             end
         end
 
@@ -232,7 +232,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             
             % Create the slice as a new LogMsgGroup
             field_names_string = strjoin(obj.fieldNameCell,',');
-            slice = LogMsgGroup(obj.type, obj.name, obj.data_len, obj.format, field_names_string);
+            slice = LogMsgGroup(obj.typeNumID, obj.name, obj.data_len, obj.format, field_names_string);
             % For each data field, copy the slice of data, identified by slice_ndx
             for field_name = slice.fieldNameCell
                 % HGM: The following is valid for 1-dim and 2-dim fields.
