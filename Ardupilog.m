@@ -474,7 +474,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         propertyNames = properties(obj);
         for i = 1:length(propertyNames)
             propertyName = propertyNames{i};
-            if ~isa(obj.(propertyName),'LogMsgGroup'); % Copy anything else except LogMsgGroups
+            if ~isa(obj.(propertyName),'LogMsgGroup') % Copy anything else except LogMsgGroups
                 newlog.(propertyName) = obj.(propertyName);
             else % Check if the LogMsgGroup is emtpy
                 if isempty(obj.(propertyName).LineNo) % Choosing a field which will always exist
