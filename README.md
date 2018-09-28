@@ -1,6 +1,8 @@
 # ardupilog
 An Ardupilot log to MATLAB converter. Primarily intended to facilitate processing of logs under MATLAB environment.
 
+It is very efficient: The time required to parse large logs is in the order of seconds.
+
 ## Supported log formats
 Currently, only Dataflash logs (.bin files) are supported.
 
@@ -50,3 +52,18 @@ sliced_log = log.getSlice([<start_value>, <end_vlaue>], <slice_type>)
 ```matlab
 log_during_cruise = log.getSlice([t_begin_cruise, t_end_cruise], 'TimeUS')
 ```
+
+### Exporting to plain struct
+To parse and use the `log` object created by
+```matlab
+log = Ardupilog('<path-to-log>')
+```
+requires the `ardupilog` library to exist in the current MATLAB path.
+
+Creating a more basic struct file, free of the `ardupilog` dependency, is possible with:
+```matlab
+log_struct = log.getSruct();
+```
+`log_struct` does not need the `ardupilog` source code accompanying it to be shared.
+
+## LICENSE
