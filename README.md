@@ -67,3 +67,4 @@ log_struct = log.getSruct();
 `log_struct` does not need the `ardupilog` source code accompanying it to be shared.
 
 ## LICENSE
+This work is distributed under the GNU GPLv3 license.
