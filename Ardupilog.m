@@ -25,6 +25,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     
     methods
         function obj = Ardupilog(varargin)
+        % TODO: Write a (usage) help message here. User sees this
+        % when typing "help Ardupilog" at the matlab prompt.
             
             % Setup argument parser
             p = inputParser;
@@ -528,7 +530,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             propName = propNames{i};
             if isa(obj.(propName),'LogMsgGroup')
                 msgNames{end+1} = propName;
-                msgIds(end+1) = obj.(propName).type;
+                msgIds(end+1) = obj.(propName).typeNumID;
             end
         end
         
@@ -554,7 +556,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         for i = 1:length(propertyNames)
             propertyName = propertyNames{i};
             if isa(newlog.(propertyName),'LogMsgGroup'); % For each message group
-                msgId = newlog.(propertyName).type;
+                msgId = newlog.(propertyName).typeNumID;
                 if iscellstr(newlog.msgFilter)
                     if ~ismember(propertyName,newlog.msgFilter)
                         newlog.(propertyName).LineNo = []; % Mark the message group for deletion
