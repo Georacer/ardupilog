@@ -40,7 +40,7 @@ log = Ardupilog('<path-to-log', <msgFilter>)
 * Or a cell array of strings. Each string is the literal name of the message type.
 
 ### Slicing
-Typially, only a small portion of the flight log is of interest. Ardupilog supports *slicing* logs to a specific start-end interval with:
+Typically, only a small portion of the flight log is of interest. Ardupilog supports *slicing* logs to a specific start-end interval with:
 ```matlab
 sliced_log = log.getSlice([<start_value>, <end_vlaue>], <slice_type>)
 ```
