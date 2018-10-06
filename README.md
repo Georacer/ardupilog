@@ -23,7 +23,7 @@ The variable struct `log` will be generated with the included message types as f
 Each field is a variable of type `LogMsgGroup`.
 
 Each `LogMsgGroup` under a log contains the following members:
-* `type`: The message ID.
+* `typeNumID`: The message ID.
 * `name`: The declared name string.
 * `LineNo`: The message sequence numbers where messages of this type appear in the log.
 * `TimeS`: The timestamps vector in seconds since boot time, for each message.
@@ -45,12 +45,12 @@ Typially, only a small portion of the flight log is of interest. Ardupilog suppo
 sliced_log = log.getSlice([<start_value>, <end_vlaue>], <slice_type>)
 ```
 * `sliced_log` is a deep copy of the original log, sliced to the desired limits.
-* `slice_type` can be either `TimeUS` or `LineNo`.
-* `<start-value>` and `<end_value>` are either microseconds since boot or message sequence indexes.
+* `slice_type` can be either `TimeS` or `LineNo`.
+* `<start-value>` and `<end_value>` are either sconds since boot or message sequence indexes.
 
 **Example**
 ```matlab
-log_during_cruise = log.getSlice([t_begin_cruise, t_end_cruise], 'TimeUS')
+log_during_cruise = log.getSlice([t_begin_cruise, t_end_cruise], 'TimeS')
 ```
 
 ### Exporting to plain struct
@@ -62,7 +62,7 @@ requires the `ardupilog` library to exist in the current MATLAB path.
 
 Creating a more basic struct file, free of the `ardupilog` dependency, is possible with:
 ```matlab
-log_struct = log.getSruct();
+log_struct = log.getStruct();
 ```
 `log_struct` does not need the `ardupilog` source code accompanying it to be shared.
 
