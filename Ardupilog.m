@@ -6,9 +6,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         version % Firmware version
         commit % Specific git commit
         bootTimeUTC % String displaying time of boot in UTC
-        totalLogMsgs = 0;
+        totalLogMsgs = 0; % Total number of messages of the original log
         msgFilter = []; % Storage for the msgIds/msgNames desired for parsing
-        numMsgs = 0;
+        numMsgs = 0; % Number of messages included in this log
     end
     properties (Access = private)
         fileID = -1;
@@ -25,8 +25,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
     
     methods
         function obj = Ardupilog(varargin)
-        % TODO: Write a (usage) help message here. User sees this
-        % when typing "help Ardupilog" at the matlab prompt.
+        %ARDUPILOG Ardupilot log to MATLAB converter
+        %Reads an Ardupilot .bin log and produces structure with custom containers.
+        %Message types are separated, values are timestamped.
             
             % Setup argument parser
             p = inputParser;
@@ -506,7 +507,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         propertyNames = properties(obj);
         for i = 1:length(propertyNames)
             propertyName = propertyNames{i};
-            if ~isa(obj.(propertyName),'LogMsgGroup'); % Copy anything else except LogMsgGroups
+            if ~isa(obj.(propertyName),'LogMsgGroup') % Copy anything else except LogMsgGroups
                 newlog.(propertyName) = obj.(propertyName);
             else % Check if the LogMsgGroup is emtpy
                 if isempty(obj.(propertyName).LineNo) % Choosing a field which will always exist
