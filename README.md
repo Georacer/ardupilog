@@ -32,7 +32,8 @@ Each `LogMsgGroup` under a log contains the following members:
 ### Message Filter
 You can optionally filter the log file for specific message types:
 ```matlab
-log = Ardupilog('<path-to-log', <msgFilter>)
+log_filtered = log.filterMsgs(<msgFilter>)
+log_filtered = Ardupilog('<path-to-log', <msgFilter>)
 ```
 
 `msgFilter` can be:
