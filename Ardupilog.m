@@ -419,7 +419,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                      'Jan 01 2006'
                      'Jan 01 2009'
                      'Jul 01 2012'
-                     'Jul 01 2015'], 'mmm dd yyyy');
+                     'Jul 01 2015'
+                     'Jan 01 2017'], 'mmm dd yyyy');
                 leapseconds = sum(recv_gps_datenum > leap_second_table);
                 recv_utc_datenum = recv_gps_datenum - leapseconds/60/60/24;
                 % Record adjusted time to the log's property
