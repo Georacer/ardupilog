@@ -360,41 +360,47 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % and assuming the GPS message was RECEIVED at it's TimeUS. (Note: the
         % truth is it was LOGGED at this time, not received)
             
-        % HGM HACK: 3DR SOLO might have TimeMS instead of TimeUS...
-        if isprop(obj.GPS, 'TimeUS')
-            timestr = 'TimeUS';
-            timeconvert = 1;
-        elseif isprop(obj.GPS, 'TimeMS')
-            timestr = 'TimeMS';
-            timeconvert = 1e3;
-        else
-            error('Unsupported time in obj.GPS')
-        end
+            % HGM HACK: The 3DR SOLO has a TimeMS field from the GPS, which is
+            % the GMS data (miliseconds in GPS week). Because this conflicts with
+            % the usual "TimeMS" data which is the miliseconds since boot, that
+            % data is instead confusingly name-changed to GPS.T
+            if isprop(obj.GPS, 'TimeUS') % This is a typical Ardupilot loga
+                timestr = 'TimeUS';
+                timeconvert = 1;
+            elseif isprop(obj.GPS, 'TimeMS') || isprop(obj.GPS, 'T') % This is one of the old Solo logs
+                timestr = 'T';
+                timeconvert = 1e3;
+            else
+                error('Unsupported time format in obj.GPS')
+            end
 
-        if isprop(obj.GPS, 'GWk')
-            wkstr = 'GWk';
-        elseif isprop(obj.GPS, 'Week')
-            wkstr = 'Week';
-        else
-            error('Unsupported week-type in obj.GPS')
-        end
+            if isprop(obj.GPS, 'GWk') % (typical)
+                wkstr = 'GWk';
+            elseif isprop(obj.GPS, 'Week') % (Old Solo log)
+                wkstr = 'Week';
+            else
+                error('Unsupported week-type in obj.GPS')
+            end
 
-        if isprop(obj.GPS, 'GMS')
-            gpssecstr = 'GMS';
-        elseif isprop(obj.GPS, 'T')
-            gpssecstr = 'T';
-        else
-            error('Unsupported GPS-seconds-type in obj.GPS')
-        end
+            if isprop(obj.GPS, 'GMS') % (typical)
+                gpssecstr = 'GMS';
+            elseif isprop(obj.GPS, 'T') || isprop(obj.GPS, 'TimeMS') % (Old Solo log)
+                gpssecstr = 'TimeMS';
+            else
+                error('Unsupported GPS-seconds-type in obj.GPS')
+            end
 
             if isprop(obj, 'GPS') && ~isempty(obj.GPS.(timestr))
                 % Get the time data from the log
+                first_ndx = find(obj.GPS.(wkstr) > 0, 1, 'first');
+
                 temp = obj.GPS.(timestr);
-                recv_timeUS = temp(1)*timeconvert;
+                recv_timeUS = temp(first_ndx)*timeconvert;
                 temp = obj.GPS.(wkstr);
-                recv_GWk = temp(1);
+                recv_GWk = temp(first_ndx);
                 temp = obj.GPS.(gpssecstr);
-                recv_GMS = temp(1);
+                recv_GMS = temp(first_ndx);
+                
                 % Calculate the gps-time datenum
                 %  Ref: http://www.oc.nps.edu/oc2902w/gps/timsys.html
                 %  Ref: https://confluence.qps.nl/display/KBE/UTC+to+GPS+Time+Correction
