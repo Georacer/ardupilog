@@ -161,7 +161,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                             continue;
                         end
                     elseif isnumeric(obj.msgFilter)
-                        if ~ismember(msgId,obj.msgFilter);
+                        if ~ismember(msgId,obj.msgFilter)
                             continue;
                         end
                     else
