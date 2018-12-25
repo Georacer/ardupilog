@@ -47,8 +47,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.filePathName = filepathname;
             else
                 % Use user-specified log file
-                %[filepathname, filename, extension] = fileparts(which(p.Results.path));
-                [filepathname, filename, extension] = fileparts(p.Results.path);
+                [filepathname, filename, extension] = fileparts(which(p.Results.path));
                 obj.filePathName = filepathname;
                 obj.fileName = [filename, extension];
             end
