@@ -480,6 +480,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         %  will return a smaller Ardupilog, only containing log data between
         %  TimeUS values greater than t_begin_cruise and less than t_end_cruise.
 
+            % Check if input argument order was accidentally reversed
+            if isnumeric(slice_type) && ischar(slice_values)
+                error('The correct call is getSlice([value1 value2], slice_type). (It looks like the argument order may have been reversed.)')
+            end
+
             % Copy all the properties, zero the number of messages
             slice = copy(obj);
             slice.numMsgs = 0;
