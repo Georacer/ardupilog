@@ -43,14 +43,18 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             if isempty(p.Results.path)
                 % If constructor is empty, prompt user for log file
                 [filename, filepathname, ~] = uigetfile('*.bin','Select binary (.bin) log-file');
-                obj.fileName = filename;
-                obj.filePathName = filepathname;
             else
                 % Use user-specified log file
-                [filepathname, filename, extension] = fileparts(which(p.Results.path));
-                obj.filePathName = filepathname;
-                obj.fileName = [filename, extension];
+                % Try to parse an absolute path
+                [filepathname, filenameBare, extension] = fileparts(p.Results.path);
+                if isempty(filepathname) % File not found
+                    % Look for a relative path
+                    [filepathname, filenameBare, extension] = fileparts(fullfile(pwd, p.Results.path));
+                end
+                filename = [filenameBare extension];
             end
+            obj.fileName = filename;
+            obj.filePathName = filepathname;
 
             obj.msgFilter = p.Results.msgFilter; % Store the message filter
 
