@@ -21,8 +21,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
         bootDatenumUTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
-        unitsLookupCell; % N x 2 cell array. Each row has a unit identifier and its string representation
-        multsLookupArray; % N x 2 array. Each row has a multiplier identifier and its equivalent multiplier
 
     end %properties
     
@@ -165,7 +163,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                             continue;
                         end
                     elseif isnumeric(obj.msgFilter)
-                        if ~ismember(msgId,obj.msgFilter);
+                        if ~ismember(msgId,obj.msgFilter)
                             continue;
                         end
                     else
