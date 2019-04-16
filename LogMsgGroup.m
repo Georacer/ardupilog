@@ -9,6 +9,8 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
     end
     properties (Access = public)
         typeNumID = -1; % Numerical ID of message type (e.g. 128=FMT, 129=PARM, 130=GPS, etc.)
+        fieldUnits = struct();
+        fieldMultipliers = struct();
         name = ''; % Human readable name of msg group
         LineNo = [];
     end
@@ -41,10 +43,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             
             % For each of the fields
             for ndx = 1:length(obj.fieldNameCell)
-                fieldNameStr = obj.fieldNameCell{ndx};
-                if isstrprop(fieldNameStr(1),'digit') % Check if first label is a digit
-                    fieldNameStr = strcat(obj.alphaPrefix,fieldNameStr); % Add a alphabetic character as prefix
-                end
+                fieldNameStr = obj.sanitizeFieldName(obj.fieldNameCell{ndx});
                 % Create a dynamic property with field name, and add to fieldInfo array
                 if isempty(obj.fieldInfo)
                     obj.fieldInfo = addprop(obj, fieldNameStr);
@@ -165,6 +164,43 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         
         function [] = setLineNo(obj, LineNo)
             obj.LineNo = LineNo;
+        end
+        
+        function [fieldName] = sanitizeFieldName(obj, inputName)
+            % Prepend prefix if field name is numeric
+            if isstrprop(inputName(1),'digit') % Check if first label is a digit
+                fieldName = strcat(obj.alphaPrefix,inputName); % Add a alphabetic character as prefix
+            else
+                fieldName = inputName;
+            end
+        end
+        
+        function [] = setUnitNames(obj, NamesCell)
+            % Store a string cell array with the unit names
+            
+            % Validate input
+            if length(obj.fieldNameCell)~=length(NamesCell)
+                error('Wrong input length');
+            end
+            
+            for fieldIdx=1:length(NamesCell)
+                fieldName = obj.sanitizeFieldName(obj.fieldNameCell{fieldIdx});
+                obj.fieldUnits.(fieldName) = NamesCell{fieldIdx};
+            end
+        end
+        
+        function [] = setMultValues(obj, MultArray)
+            % Store an array containing the field value multipliers
+            
+            % Validate input
+            if length(obj.fieldNameCell)~=length(MultArray)
+                error('Wrong input length');
+            end
+            
+            for fieldIdx=1:length(MultArray)
+                fieldName = obj.sanitizeFieldName(obj.fieldNameCell{fieldIdx});
+                obj.fieldMultipliers.(fieldName) = MultArray(fieldIdx);
+            end
         end
         
         function [] = setBootDatenumUTC(obj, bootDatenumUTC)

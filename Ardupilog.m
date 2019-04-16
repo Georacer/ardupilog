@@ -6,6 +6,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         version % Firmware version
         commit % Specific git commit
         bootTimeUTC % String displaying time of boot in UTC
+        msgsContained = {}; % A cell array with all the message names contained in the log
         totalLogMsgs = 0; % Total number of messages of the original log
         msgFilter = []; % Storage for the msgIds/msgNames desired for parsing
         numMsgs = 0; % Number of messages included in this log
@@ -177,6 +178,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.(msgName).storeData(data');
             end
             
+            % If available, parse unit formatting messages
+            availableFields = fieldnames(obj);
+            if (ismember('UNIT', availableFields) && ismember('MULT', availableFields) && ismember('FMTU', availableFields))
+                obj.buildMsgUnitFormats();
+            end
+            
             % Construct the LineNo for the whole log
             LineNo_ndx_vec = sort(vertcat(obj.valid_msgheader_cell{:,2}));
             LineNo_vec = [1:length(LineNo_ndx_vec)]';
@@ -309,6 +316,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 if isempty(new_msg_group)
                     warning('Msg group %d/%s could not be created', newType, newName);
                 else
+                    obj.msgsContained{end+1} = newName;
                     addprop(obj, newName);
                     obj.(newName) = new_msg_group;
                 end
@@ -323,6 +331,52 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             FMTName = obj.fmt_cell{fmt_ndx, 2};
             % Store msgData correctly in that LogMsgGroup
             obj.(FMTName).storeData(data);
+        end
+        
+        function [] = buildMsgUnitFormats(obj)
+            % Read the FMTU messages
+            fmtTypes = obj.FMTU.FmtType;
+            unitIds = obj.FMTU.UnitIds;
+            multIds = obj.FMTU.MultIds;
+            
+            % Read UNIT data
+            UNITId = obj.UNIT.Id;
+            UNITLabel = obj.UNIT.Label;            
+            % Read MULT data
+            MULTId = obj.MULT.Id;
+            MULTMult = obj.MULT.Mult;
+            
+            % Build a msgId to msgName lookup table
+            msgIds = zeros(1,length(obj.msgsContained));
+            for msgIdx = 1:length(msgIds)
+                msgName = obj.msgsContained{msgIdx};
+                msgIds(msgIdx) = obj.(msgName).typeNumID;
+            end
+            
+            % Iterate over each FMTU message
+            for fmtIdx = 1:length(fmtTypes)
+                msgId = fmtTypes(fmtIdx);
+                msgIdx = find(msgIds==msgId, 1, 'first');
+                msgName = obj.msgsContained{msgIdx};
+                currentUnitIds = trimTail(unitIds(fmtIdx,:));
+                currentMultIds = trimTail(multIds(fmtIdx,:));
+                unitNames = cell(1,length(currentUnitIds));
+                multValues = zeros(1,length(currentMultIds));
+                % Iterate over each message field
+                for unitIdx = 1:length(currentUnitIds)
+                    % Lookup unit identifier
+                    idx = find(UNITId==currentUnitIds(unitIdx));
+                    unitName = trimTail(UNITLabel(idx,:));
+                    unitNames{unitIdx} = unitName;
+                    % Lookup multiplier identifier
+                    idx = find(MULTId==currentMultIds(unitIdx));
+                    multValue = MULTMult(idx);
+                    multValues(unitIdx) = multValue;
+                end
+                % Pass the information into the LogMsgGroup
+                obj.(msgName).setUnitNames(unitNames);
+                obj.(msgName).setMultValues(multValues);
+            end
         end
         
         function [] = findInfo(obj)
@@ -556,15 +610,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % Filter message groups in existing Ardupilog
         
         % Get the logMsgGroups names and ids
-        msgNames = {};
-        msgIds = [];
-        propNames = properties(obj);
-        for i=1:length(propNames)
-            propName = propNames{i};
-            if isa(obj.(propName),'LogMsgGroup')
-                msgNames{end+1} = propName;
-                msgIds(end+1) = obj.(propName).typeNumID;
-            end
+        msgNames = obj.msgsContained;
+        msgIds = zeros(1,length(msgNames));
+        for i=1:length(msgNames)
+            msgName = msgNames{i};
+            msgIds(i) = obj.(msgName).typeNumID;
         end
         
         % Check for validity of the input msgFilter
@@ -584,36 +634,37 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         
         newlog = copy(obj); % Create the new log object
         newlog.msgFilter = msgFilter;
+        deletedMsgNames = cell(1,length(msgFilter));
         % Set the LineNos of any messages due for deletion to empty
-        propertyNames = properties(newlog);
-        for i = 1:length(propertyNames)
-            propertyName = propertyNames{i};
-            if isa(newlog.(propertyName),'LogMsgGroup'); % For each message group
-                msgId = newlog.(propertyName).typeNumID;
-                if iscellstr(newlog.msgFilter)
-                    if ~ismember(propertyName,newlog.msgFilter)
-                        newlog.(propertyName).LineNo = []; % Mark the message group for deletion
-                    end
-                elseif isnumeric(newlog.msgFilter)
-                    if ~ismember(msgId,newlog.msgFilter)
-                        newlog.(propertyName).LineNo = []; % Mark the message group for deletion
-                    end
-                else
-                    error('msgFilter type should have passed validation by now and I shouldnt be here');
+        for i = 1:length(msgNames)
+            msgName = msgNames{i};
+            msgId = newlog.(msgName).typeNumID;
+            if iscellstr(newlog.msgFilter)
+                if ~ismember(msgName,newlog.msgFilter)
+                    newlog.(msgName).LineNo = []; % Mark the message group for deletion
+                    deletedMsgNames{i} = msgName;
                 end
+            elseif isnumeric(newlog.msgFilter)
+                if ~ismember(msgId,newlog.msgFilter)
+                    newlog.(msgName).LineNo = []; % Mark the message group for deletion
+                    deletedMsgNames{i} = msgName;
+                end
+            else
+                error('msgFilter type should have passed validation by now and I shouldnt be here');
             end
         end
+        
+        % Update the msgsContained attribute
+        newlog.msgsContained = setdiff(obj.msgsContained, deletedMsgNames);
         
         newlog = newlog.deleteEmptyMsgs();  
         
         % Update the number of actual included messages
         newlog.numMsgs = 0;
-        propNames = properties(newlog);
-        for i = 1:length(propNames)
-            propName = propNames{i};
-            if isa(newlog.(propName),'LogMsgGroup')
-                newlog.numMsgs = newlog.numMsgs + length(newlog.(propName).LineNo);
-            end
+        newMsgNames = newlog.msgsContained;
+        for i = 1:length(newMsgNames)
+            msgName = newMsgNames{i};
+            newlog.numMsgs = newlog.numMsgs + length(newlog.(msgName).LineNo);
         end
         
         end
