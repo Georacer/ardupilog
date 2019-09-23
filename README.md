@@ -29,6 +29,24 @@ Each `LogMsgGroup` under a log contains the following members:
 * `TimeS`: The timestamps vector in seconds since boot time, for each message.
 * One vector for each of the message fields, of the same length as the timestamps.
 
+### Plotting
+To plot a specific numerical data field from a specific message, you can enter:
+```matlab
+log.plot('<msgName>/<fieldName>');
+```
+
+The full command allows for passnig a Matlab-style line style and an existing Axes Handle to plot in.
+Additionally, it always returns the Axes Handles it plots in:
+```matlab
+ah = log.plot('<msgName>/<fieldName>',<lineStyle>,<axesHandle>)
+```
+
+For example, to plot the `Pitch` field from the `AHR2` message in red, enter:
+```matlab
+log.plot('AHR2/Pitch', 'r');
+```
+The plot will 
+
 ### Message Filter
 You can optionally filter the log file for specific message types:
 ```matlab
