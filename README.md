@@ -45,7 +45,6 @@ For example, to plot the `Pitch` field from the `AHR2` message in red, enter:
 ```matlab
 log.plot('AHR2/Pitch', 'r');
 ```
-The plot will 
 
 ### Message Filter
 You can optionally filter the log file for specific message types:
