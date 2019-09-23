@@ -669,6 +669,48 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         
         end
         
+        
+        function newAxisHandle = plot(obj, msgFieldName, style, axisHandle)
+        % Plot a timeseries of a message field
+        % INPUTS:
+        % MsgFieldName - the msg/field given in the format 'MsgNameString/FieldNameString'
+        % axisHandle - (optionally empty) the axis handle to plot at
+        % style - the style argument to pass to the plot command
+            [messageName, fieldName] = splitMsgField(msgFieldName);
+            
+            % Check invalid arguments
+            if ~ismember(messageName, obj.msgsContained)
+                error('Requested message does not exist in log');
+            end 
+            if ~ismember(fieldName, obj.(messageName).fieldNameCell)
+                error('%s is not a member of %s data fields', fieldName, messageName);
+            end
+            
+            % Set default argument values
+            if nargin<3
+                style = '';
+            end
+            if nargin<4
+                axisHandle = [];
+            end
+            
+            if ~isnumeric(obj.(messageName).(fieldName))
+                error('Requested plot of non-numeric message');
+            end
+            
+            if isempty(axisHandle)
+                fh = figure();
+                newAxisHandle = axes(fh);
+                plot(obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
+            else
+                plot(axisHandle, obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
+                newAxisHandle = axisHandle;
+            end
+            xlabel('Time (s)');
+            ylabel(sprintf('%s (%s)', fieldName, obj.(messageName).fieldUnits.(fieldName)));
+            grid on;
+        end
+        
     end
     
     methods(Access=protected)
@@ -704,3 +746,16 @@ function string = trimTail(string)
         string(end) = [];
     end
 end
+
+function [messageName, fieldName] = splitMsgField(string)
+% Split the message name and the field name from the passed string
+% The input must be given in the format 'MsgNameString/FieldNameString'
+    stringCell = strsplit(string,'/');
+    if length(stringCell) ~= 2
+        error('The field designation format must be exactly "<MsgName>/<FieldName>"');
+    end
+    messageName = stringCell{1};
+    fieldName = stringCell{2};
+    return;
+end
+

@@ -1,5 +1,5 @@
 classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
-    properties (Access = private)
+    properties (Access = {?Ardupilog})
         data_len = 0; % Len of data portion for this message (neglecting 2-byte header + 1-byte ID)
         format = ''; % Format string of data (e.g. QBIHBcLLefffB, QccCfLL, etc.)
         fieldInfo = []; % Array of meta.DynamicProperty items
@@ -322,6 +322,29 @@ end
 
 function len = formatLength(varType)
 % FORMATLENGTH return the size of the input variable type as designated
+
+% Format characters in the format string for binary log messages
+%   a   : int16_t[32] (array of 32 int16_t's)
+%   b   : int8_t
+%   B   : uint8_t
+%   h   : int16_t
+%   H   : uint16_t
+%   i   : int32_t
+%   I   : uint32_t
+%   f   : float
+%   d   : double
+%   n   : char[4]
+%   N   : char[16]
+%   Z   : char[64]
+%   c   : int16_t * 100
+%   C   : uint16_t * 100
+%   e   : int32_t * 100
+%   E   : uint32_t * 100
+%   L   : int32_t latitude/longitude
+%   M   : uint8_t flight mode
+%   q   : int64_t
+%   Q   : uint64_t
+
 switch varType
     case 'a' % int16_t[32] (array of 32 int16_t's)
         len = 2*32;
