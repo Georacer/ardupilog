@@ -341,7 +341,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             
             % Read UNIT data
             UNITId = obj.UNIT.Id;
-            UNITLabel = obj.UNIT.Label;            
+            UNITLabel = obj.UNIT.Label;
+            
             % Read MULT data
             MULTId = obj.MULT.Id;
             MULTMult = obj.MULT.Mult;
@@ -361,11 +362,17 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 currentUnitIds = trimTail(unitIds(fmtIdx,:));
                 currentMultIds = trimTail(multIds(fmtIdx,:));
                 unitNames = cell(1,length(currentUnitIds));
-                multValues = zeros(1,length(currentMultIds));
+                multValues = ones(1,length(currentMultIds));
+                searchFailed = false;
                 % Iterate over each message field
                 for unitIdx = 1:length(currentUnitIds)
                     % Lookup unit identifier
                     idx = find(UNITId==currentUnitIds(unitIdx));
+                    if (isempty(idx))
+                        warning('Unit msg with identifier %s was not found. Msg %s will not have unit information', currentUnitIds(unitIdx), msgName);
+                        searchFailed = true;
+                        break;
+                    end
                     unitName = trimTail(UNITLabel(idx,:));
                     unitNames{unitIdx} = unitName;
                     % Lookup multiplier identifier
@@ -374,8 +381,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     multValues(unitIdx) = multValue;
                 end
                 % Pass the information into the LogMsgGroup
-                obj.(msgName).setUnitNames(unitNames);
-                obj.(msgName).setMultValues(multValues);
+                if ~searchFailed
+                    obj.(msgName).setUnitNames(unitNames);
+                    obj.(msgName).setMultValues(multValues);
+                end
             end
         end
         
