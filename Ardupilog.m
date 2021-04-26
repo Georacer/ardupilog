@@ -711,8 +711,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % Plot a timeseries of a message field
         % INPUTS:
         % MsgFieldName - the msg/field given in the format 'MsgNameString/FieldNameString'
-        % axisHandle - (optionally empty) the axis handle to plot at
         % style - the style argument to pass to the plot command
+        % axisHandle - (optionally empty) the axis handle to plot at
             [messageName, fieldName] = splitMsgField(msgFieldName);
             
             % Check invalid arguments
@@ -739,13 +739,14 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 fh = figure();
                 newAxisHandle = axes(fh);
                 plot(obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
+                xlabel('Time (s)');
+                ylabel(sprintf('%s (%s)', fieldName, obj.(messageName).fieldUnits.(fieldName)));
+                grid on;
+                hold on;
             else
                 plot(axisHandle, obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
                 newAxisHandle = axisHandle;
             end
-            xlabel('Time (s)');
-            ylabel(sprintf('%s (%s)', fieldName, obj.(messageName).fieldUnits.(fieldName)));
-            grid on;
         end
         
     end
