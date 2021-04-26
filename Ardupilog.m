@@ -679,6 +679,34 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
         
         
+        function [] = printFields(obj, filename)
+        % Print all non-empty fields contained in the log
+        % INPUTS:
+        % filename: A filename to create or 1 to print in stdout
+            if (ischar(filename))
+                fid = fopen(filename, 'w');
+            elseif (filename == 1)
+                fid = 1;
+            else
+                error('Unsupported output type');
+            end
+            for i=1:length(obj.msgsContained)
+                msgName = obj.msgsContained{i};
+                logMsgGroup = obj.(msgName);
+                for j=1:length(logMsgGroup.fieldNameCell)
+                    fieldName = logMsgGroup.fieldNameCell{j};
+                    if isstrprop(fieldName,'digit')
+                        fieldName = [logMsgGroup.alphaPrefix fieldName];
+                    end
+                    if (~isempty(logMsgGroup.(fieldName)))
+                        fprintf(fid, '%s/%s:\t%d\n', msgName, fieldName, length(logMsgGroup.(fieldName)));
+                    end
+                end
+            end
+            fclose(fid);
+        end
+        
+        
         function newAxisHandle = plot(obj, msgFieldName, style, axisHandle)
         % Plot a timeseries of a message field
         % INPUTS:
