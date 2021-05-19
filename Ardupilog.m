@@ -740,7 +740,17 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 newAxisHandle = axes(fh);
                 plot(obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
                 xlabel('Time (s)');
-                ylabel(sprintf('%s (%s)', fieldName, obj.(messageName).fieldUnits.(fieldName)));
+                if (isfield(obj.(messageName).fieldUnits, (fieldName)) && ...
+                        isfield(obj.(messageName).fieldMultipliers, (fieldName)))
+                    unitsText = obj.(messageName).fieldUnits.(fieldName);
+                    multiplier = obj.(messageName).fieldMultipliers.(fieldName);
+                    if multiplier == 1
+                        label = sprintf('%s (%s)', fieldName, unitsText);
+                    else
+                        label = sprintf('%s (%g x %s)', fieldName, multiplier, unitsText);
+                    end
+                    ylabel(label);
+                end
                 grid on;
                 hold on;
             else
