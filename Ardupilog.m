@@ -642,8 +642,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
         
         newlog = copy(obj); % Create the new log object
-        newlog.msgFilter = msgFilter;
-        deletedMsgNames = cell(1,length(msgFilter));
+        newlog.msgFilter = msgFilter; % Store the filter that yielded this log
+        deletedMsgNames = repmat({''}, 1, 1);
         % Set the LineNos of any messages due for deletion to empty
         for i = 1:length(msgNames)
             msgName = msgNames{i};
@@ -651,12 +651,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             if iscellstr(newlog.msgFilter)
                 if ~ismember(msgName,newlog.msgFilter)
                     newlog.(msgName).LineNo = []; % Mark the message group for deletion
-                    deletedMsgNames{i} = msgName;
+                    deletedMsgNames{1, end+1} = msgName;
                 end
             elseif isnumeric(newlog.msgFilter)
                 if ~ismember(msgId,newlog.msgFilter)
                     newlog.(msgName).LineNo = []; % Mark the message group for deletion
-                    deletedMsgNames{i} = msgName;
+                    deletedMsgNames{1, end+1} = msgName;
                 end
             else
                 error('msgFilter type should have passed validation by now and I shouldnt be here');
