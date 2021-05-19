@@ -746,6 +746,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             else
                 plot(axisHandle, obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
                 newAxisHandle = axisHandle;
+                if isfield(obj.(messageName).fieldUnits, (fieldName))
+                    ylabel(sprintf('%s (%s)', fieldName, obj.(messageName).fieldUnits.(fieldName)));
+                end
             end
         end
         
