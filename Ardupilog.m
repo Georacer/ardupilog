@@ -358,6 +358,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             for fmtIdx = 1:length(fmtTypes)
                 msgId = fmtTypes(fmtIdx);
                 msgIdx = find(msgIds==msgId, 1, 'first');
+                if (isempty(msgIdx))
+                    warning('Message with id=%d does not exist in log, but its format was specified.', msgId);
+                    continue;
+                end
                 msgName = obj.msgsContained{msgIdx};
                 currentUnitIds = trimTail(unitIds(fmtIdx,:));
                 currentMultIds = trimTail(multIds(fmtIdx,:));
@@ -377,6 +381,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     unitNames{unitIdx} = unitName;
                     % Lookup multiplier identifier
                     idx = find(MULTId==currentMultIds(unitIdx));
+                    if (length(idx)>1)
+                        idx = idx(1);
+                    elseif (isempty(idx))
+                        warning('Unit msg with identifier %s was not found. Msg %s will not have unit information', currentUnitIds(unitIdx), msgName);
+                        searchFailed = true;
+                        break;
+                    end
                     multValue = MULTMult(idx);
                     multValues(unitIdx) = multValue;
                 end
