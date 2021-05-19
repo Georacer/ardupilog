@@ -297,6 +297,8 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             % Copy also the LineNo slice and set the bootDatenum
             slice.setLineNo(obj.LineNo(slice_ndx));
             slice.setBootDatenumUTC(obj.bootDatenumUTC);
+            slice.fieldUnits = obj.fieldUnits;
+            slice.fieldMultipliers = obj.fieldMultipliers;
         end
     end
     methods(Access=protected)
