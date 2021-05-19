@@ -359,9 +359,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 msgId = fmtTypes(fmtIdx);
                 msgIdx = find(msgIds==msgId, 1, 'first');
                 if (isempty(msgIdx))
-                    warning('msgIdx not found?');
-                    searchFailed = true;
-                    break;
+                    warning('Message with id=%d does not exist in log, but its format was specified.', msgId);
+                    continue;
                 end
                 msgName = obj.msgsContained{msgIdx};
                 currentUnitIds = trimTail(unitIds(fmtIdx,:));
