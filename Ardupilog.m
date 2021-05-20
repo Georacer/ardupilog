@@ -718,6 +718,43 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         end
         
         
+        function label = getLabel(obj, msgFieldName)
+        % Get a text label for a message field
+        % INPUTS:
+        % MsgFieldName - the msg/field given in the format 'MsgNameString/FieldNameString'
+            [messageName, fieldName] = splitMsgField(msgFieldName);
+
+            % Check invalid arguments
+            if ~ismember(messageName, obj.msgsContained)
+                error('Requested message does not exist in log');
+            end
+            if ~ismember(fieldName, obj.(messageName).fieldNameCell)
+                error('%s is not a member of %s data fields', fieldName, messageName);
+            end
+
+            if (isfield(obj.(messageName).fieldUnits, (fieldName)) && ...
+                    isfield(obj.(messageName).fieldMultipliers, (fieldName)))
+                unitsText = obj.(messageName).fieldUnits.(fieldName);
+                multiplier = obj.(messageName).fieldMultipliers.(fieldName);
+                if isempty(unitsText)
+                    if multiplier == 1 || multiplier == 0
+                        label = sprintf('%s', fieldName);
+                    else
+                        label = sprintf('%s (%g)', fieldName, multiplier);
+                    end
+                else
+                    if multiplier == 1 || multiplier == 0
+                        label = sprintf('%s (%s)', fieldName, unitsText);
+                    else
+                        label = sprintf('%s (%g x %s)', fieldName, multiplier, unitsText);
+                    end
+                end
+            else
+                label = '';
+            end
+        end
+
+
         function newAxisHandle = plot(obj, msgFieldName, style, axisHandle)
         % Plot a timeseries of a message field
         % INPUTS:
@@ -751,15 +788,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 newAxisHandle = axes(fh);
                 plot(obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
                 xlabel('Time (s)');
-                if (isfield(obj.(messageName).fieldUnits, (fieldName)) && ...
-                        isfield(obj.(messageName).fieldMultipliers, (fieldName)))
-                    unitsText = obj.(messageName).fieldUnits.(fieldName);
-                    multiplier = obj.(messageName).fieldMultipliers.(fieldName);
-                    if multiplier == 1
-                        label = sprintf('%s (%s)', fieldName, unitsText);
-                    else
-                        label = sprintf('%s (%g x %s)', fieldName, multiplier, unitsText);
-                    end
+                label = obj.getLabel(msgFieldName);
+                if ~isempty(label)
                     ylabel(label);
                 end
                 grid on;
