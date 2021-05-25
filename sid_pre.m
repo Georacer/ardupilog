@@ -95,27 +95,48 @@ end
 
 % slice the system identification flight subsection(s)
 if exist('sid', 'var') ~= 1
+    id = cell(length(bin_log_sections.file), 1);
     for i = 1:length(bin_log_sections.file)
-        b = bin_logs(bin_log_sections.file(i)).getSlice( ...
+        log = bin_logs(bin_log_sections.file(i)).getSlice( ...
                     [bin_logs(bin_log_sections.file(i)).SIDS.TimeUS(bin_log_sections.subflight(i))/1e6 ...
                      bin_logs(bin_log_sections.file(i)).SIDS.TimeUS(bin_log_sections.subflight(i))/1e6+bin_logs(bin_log_sections.file(i)).SIDS.TR(bin_log_sections.subflight(i))+1], ...
                     'TimeS');
         % preserve some messages that are outside of the slice time interval
-        b.FMT = bin_logs(bin_log_sections.file(i)).FMT;
-        b.UNIT = bin_logs(bin_log_sections.file(i)).UNIT;
-        b.FMTU = bin_logs(bin_log_sections.file(i)).FMTU;
-        b.MULT = bin_logs(bin_log_sections.file(i)).MULT;
-        b.PARM = bin_logs(bin_log_sections.file(i)).PARM;
+        log.FMT = bin_logs(bin_log_sections.file(i)).FMT;
+        log.UNIT = bin_logs(bin_log_sections.file(i)).UNIT;
+        log.FMTU = bin_logs(bin_log_sections.file(i)).FMTU;
+        log.MULT = bin_logs(bin_log_sections.file(i)).MULT;
+        log.PARM = bin_logs(bin_log_sections.file(i)).PARM;
         % Update the number of actual included messages
-        b.numMsgs = 0;
-        for msgName = b.msgsContained
-            msgName = char(msgName);
-            b.numMsgs = b.numMsgs + length(b.(msgName).LineNo);
+        log.numMsgs = 0;
+        for msg = log.msgsContained
+            msgName = char(msg);
+            log.numMsgs = log.numMsgs + length(log.(msgName).LineNo);
         end
+        
+        % https://de.mathworks.com/help/ident/ug/representing-time-and-frequency-domain-data-using-iddata-objects.html
+        in_dat = log.SIDD.Targ;
+        out_dat = out_data(log, i);
+        len = min(length(in_dat), length(out_dat));
+        if len ~= length(in_dat)
+            disp(['sorry, had to truncate SID in data on ' sid_axis_desc(i)]);
+        end
+        if len ~= length(out_dat)
+            disp(['sorry, had to truncate SID out data on ' sid_axis_desc(i)]);
+        end
+        idd = iddata(out_dat(1:len), log.SIDD.Targ(1:len), [], ...
+            'SamplingInstants', log.SIDD.Time(1:len), ...
+            'Name', sid_axis_desc(i), ...
+            'InputName', input_name(i), ...
+            'OutputName', output_name(i), ...
+            'InputUnit', input_unit(i), ...
+            'OutputUnit', output_unit(i));
+
         if save_a_mat_file_per_sid_axis
-            save(['sid_' num2str(i) '.mat'], 'b');
+            save(['sid_' num2str(i) '.mat'], 'log', 'idd');
         end
-        sid(i) = b;
+        sid(i) = log;
+        id{i} = idd;
     end
     
     % save the result to a file for future use
@@ -123,11 +144,188 @@ if exist('sid', 'var') ~= 1
     if exist(filename, 'file')
         [filename, path] = uiputfile({'*.mat','Mat file (*.mat)';'*.*','All files (*.*)'}, 'Save File Name', filename);
     end
-    if ~isempty(filename)
-        save(filename, 'sid');
+    if filename ~= 0
+        save(filename, 'sid', 'id');
     end
     
-    clear i filter_msgs b msgName filename path
+    clear i filter_msgs log msg msgName filename path in_dat out_dat len idd
 else
      disp('Skiped subfligths slicing. Using cached sid workspace variable instead');
+end
+
+function in_dat = in_data(obj, sid_axis)
+    switch(sid_axis)
+        case 1
+            in_dat = obj.SIDD.Targ;
+        case 2
+            in_dat = obj.SIDD.Targ;
+        case 3
+            in_dat = obj.SIDD.Targ;
+        case 4
+            in_dat = obj.SIDD.Targ;
+        case 5
+            in_dat = obj.SIDD.Targ;
+        case 6
+            in_dat = obj.SIDD.Targ;
+        case 7
+            in_dat = obj.SIDD.Targ;
+        case 8
+            in_dat = obj.SIDD.Targ;
+        case 9
+            in_dat = obj.SIDD.Targ;
+        case 10
+            in_dat = obj.SIDD.Targ;
+        case 11
+            in_dat = obj.SIDD.Targ;
+        case 12
+            in_dat = obj.SIDD.Targ;
+        case 13
+            in_dat = obj.SIDD.Targ;
+    end
+end
+
+function out_dat = out_data(obj, sid_axis)
+    switch(sid_axis)
+        case 1
+            out_dat = obj.ATT.Roll;
+        case 2
+            out_dat = obj.ATT.Pitch;
+        case 3
+            out_dat = obj.ATT.Yaw;
+        case 4
+            out_dat = obj.ATT.Roll;
+        case 5
+            out_dat = obj.ATT.Pitch;
+        case 6
+            out_dat = obj.ATT.Yaw;
+        case 7
+            out_dat = obj.RATE.R;
+        case 8
+            out_dat = obj.RATE.P;
+        case 9
+            out_dat = obj.RATE.Y;
+        case 10
+            out_dat = obj.PIDR.Act;
+        case 11
+            out_dat = obj.PIDP.Act;
+        case 12
+            out_dat = obj.PIDY.Act;
+        case 13
+            out_dat = obj.PIDA.Act;
+    end
+end
+
+function in_nam = input_name(sid_axis)
+    switch(sid_axis)
+        case 1
+            in_nam = 'SIDD.Targ';
+        case 2
+            in_nam = 'SIDD.Targ';
+        case 3
+            in_nam = 'SIDD.Targ';
+        case 4
+            in_nam = 'SIDD.Targ';
+        case 5
+            in_nam = 'SIDD.Targ';
+        case 6
+            in_nam = 'SIDD.Targ';
+        case 7
+            in_nam = 'SIDD.Targ';
+        case 8
+            in_nam = 'SIDD.Targ';
+        case 9
+            in_nam = 'SIDD.Targ';
+        case 10
+            in_nam = 'SIDD.Targ';
+        case 11
+            in_nam = 'SIDD.Targ';
+        case 12
+            in_nam = 'SIDD.Targ';
+        case 13
+            in_nam = 'SIDD.Targ';
+    end
+end
+
+function out_nam = output_name(sid_axis)
+    switch(sid_axis)
+        case 1
+            out_nam = 'ATT.Roll';
+        case 2
+            out_nam = 'ATT.Pitch';
+        case 3
+            out_nam = 'ATT.Yaw';
+        case 4
+            out_nam = 'ATT.Roll';
+        case 5
+            out_nam = 'ATT.Pitch';
+        case 6
+            out_nam = 'ATT.Yaw';
+        case 7
+            out_nam = 'RATE.R';
+        case 8
+            out_nam = 'RATE.P';
+        case 9
+            out_nam = 'RATE.Y';
+        case 10
+            out_nam = 'PIDR.Act';
+        case 11
+            out_nam = 'PIDP.Act';
+        case 12
+            out_nam = 'PIDY.Act';
+        case 13
+            out_nam = 'PIDA.Act';
+    end
+end
+
+function desc = sid_axis_desc(sid_axis)
+    switch(sid_axis)
+        case 1
+            desc = 'Input roll angle';
+        case 2
+            desc = 'Input pitch angle';
+        case 3
+            desc = 'Input yaw angle';
+        case 4
+            desc = 'Recovery (FF=0) roll angle';
+        case 5
+            desc = 'Recovery (FF=0) pitch angle';
+        case 6
+            desc = 'Recovery (FF=0) yaw angle';
+        case 7
+            desc = 'Rate roll';
+        case 8
+            desc = 'Rate pitch';
+        case 9
+            desc = 'Rate yaw';
+        case 10
+            desc = 'Mixer roll';
+        case 11
+            desc = 'Mixer pitch';
+        case 12
+            desc = 'Mixer yaw';
+        case 13
+            desc = 'Mixer thrust';
+    end
+end
+
+function desc = input_unit(sid_axis)
+    switch(sid_axis)
+        case {1, 2, 3, 4, 5, 6}
+            desc = '°';
+        case {7, 8, 9}
+            desc = '°/s';
+        case {10, 11, 12, 13}
+            desc = ' ';
+    end
+end
+
+function desc = output_unit(sid_axis)
+    switch(sid_axis)
+        case {1, 2, 3, 4, 5, 6}
+            desc = '°';
+        case {7, 8, 9}
+            desc = '°/s';
+        case {10, 11, 12, 13}
+            desc = ' ';
+    end
 end
