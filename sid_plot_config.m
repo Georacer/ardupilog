@@ -13,6 +13,11 @@
 % 2 for just SID_AXIS == 2
 % ...
 % 13 for just SID_AXIS == 13
+%
+% or
+%
+% use an array of the axis you want to use
+%
 sid_axis = 0;
 
 % plot all 3 gyro axis together, or just the relevant axis
