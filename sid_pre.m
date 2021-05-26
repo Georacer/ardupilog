@@ -124,16 +124,19 @@ if exist('sid', 'var') ~= 1
         if len ~= length(out_dat)
             disp(['sorry, had to truncate SID out data on ' sid_axis_desc(i)]);
         end
-        idd = iddata(out_dat(1:len), log.SIDD.Targ(1:len), [], ...
-            'SamplingInstants', log.SIDD.Time(1:len), ...
+        delta_T = log.SIDD.Time(2:len)-log.SIDD.Time(1:len-1);
+        Ts = mean(delta_T);
+        %plot(delta_T);
+        idd = iddata(out_dat(1:len), log.SIDD.Targ(1:len), Ts, ...
             'Name', sid_axis_desc(i), ...
             'InputName', input_name(i), ...
             'OutputName', output_name(i), ...
             'InputUnit', input_unit(i), ...
             'OutputUnit', output_unit(i));
+            % 'SamplingInstants', log.SIDD.Time(1:len), ...
 
         if save_a_mat_file_per_sid_axis
-            save(['sid_' num2str(i) '.mat'], 'log', 'idd');
+            save(['sid_' num2str(i) '.mat'], 'log', 'idd', 'Ts');
         end
         sid(i) = log;
         id{i} = idd;
@@ -145,10 +148,10 @@ if exist('sid', 'var') ~= 1
         [filename, path] = uiputfile({'*.mat','Mat file (*.mat)';'*.*','All files (*.*)'}, 'Save File Name', filename);
     end
     if filename ~= 0
-        save(filename, 'sid', 'id');
+        save(filename, 'sid', 'id', 'Ts');
     end
     
-    clear i filter_msgs log msg msgName filename path in_dat out_dat len idd
+    clear i filter_msgs log msg msgName filename path in_dat out_dat len idd delta_T
 else
      disp('Skiped subfligths slicing. Using cached sid workspace variable instead');
 end
