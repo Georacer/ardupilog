@@ -37,22 +37,36 @@ if exist('bin_logs', 'var') ~= 1
         ax = subplot(2, 1, 1);
         ax = bin_logs(file).plot('MODE/ModeNum', 'b.', ax);
         ylabel(bin_logs(file).getLabel('MODE/ModeNum'));
+        if ~issorted(bin_logs(file).MODE.TimeS, 'strictascend')
+            disp([char(bin_log_filenames(file)) ' MODE.TimeS is not monotonic!'])
+        end
         title(bin_log_filenames(file));
         hold on;
         yyaxis right;
         ax = bin_logs(file).plot('SIDS/Ax', 'r*', ax);
         ylabel(bin_logs(file).getLabel('SIDS/Ax'));
+        if ~issorted(bin_logs(file).SIDS.TimeS, 'strictascend')
+            disp([char(bin_log_filenames(file)) ' SIDS.TimeS is not monotonic!'])
+            xlim([min(bin_logs(file).MODE.TimeS) max(bin_logs(file).MODE.TimeS)]);
+        end
         hold off;
-        
+
         ax = subplot(2, 1, 2);
         ax = bin_logs(file).plot('SIDD/F', 'b.', ax);
         ylabel(bin_logs(file).getLabel('SIDD/F'));
+        if ~issorted(bin_logs(file).SIDD.TimeS, 'strictascend')
+            disp([char(bin_log_filenames(file)) ' SIDD.TimeS is not monotonic!'])
+        end
         hold on;
         yyaxis right;
         TimeS = bin_logs(file).SIDS.TimeS;
         subflight = 1:length(bin_logs(file).SIDS.Ax);
         plot(TimeS, subflight, 'r*');
         ylabel('subflight');
+        if ~issorted(bin_logs(file).SIDS.TimeS, 'strictascend')
+            disp([char(bin_log_filenames(file)) ' SIDS.TimeS is not monotonic!'])
+            xlim([min(bin_logs(file).MODE.TimeS) max(bin_logs(file).MODE.TimeS)]);
+        end
         hold off;
 
         % This aids the users configuring the bin_log_sections.file and
