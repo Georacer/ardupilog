@@ -420,10 +420,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % From the GPS time, stored in GWk and GMS, calculate what UTC
         % (Coordinated Universal time) was when the Ardupilot microcontroller
         % booted. (TimeUS = AP_HAL::millis() = 0)
-            
-        % HGM: It's possible the accuracy of this can be improved. I'll put the
-        % details of my idea here in the comments, and we can move to a GitHub
-        % issue or whatever as appropriate.
         %
         % When a GPS receives data, containing absolute time info (logged in GWk and
         % GMS) it is timestamped by Ardupilot in microseconds-since-boot.  The
@@ -441,7 +437,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             % the GMS data (miliseconds in GPS week). Because this conflicts with
             % the usual "TimeMS" data which is the miliseconds since boot, that
             % data is instead confusingly name-changed to GPS.T
-            if isprop(obj.GPS, 'TimeUS') % This is a typical Ardupilot loga
+            if isprop(obj.GPS, 'TimeUS') % This is a typical Ardupilot logs
                 timestr = 'TimeUS';
                 timeconvert = 1;
             elseif isprop(obj.GPS, 'TimeMS') || isprop(obj.GPS, 'T') % This is one of the old Solo logs
@@ -467,10 +463,12 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 error('Unsupported GPS-seconds-type in obj.GPS')
             end
 
-            if isprop(obj, 'GPS') && ~isempty(obj.GPS.(timestr))
-                % Get the time data from the log
+            if ~isempty(obj.GPS.(timestr))
+                % Get the first valid time data from the log
                 first_ndx = find(obj.GPS.(wkstr) > 0, 1, 'first');
-
+            end
+            if ~isempty(first_ndx)
+            
                 temp = obj.GPS.(timestr);
                 recv_timeUS = temp(first_ndx)*timeconvert;
                 temp = obj.GPS.(wkstr);
@@ -511,7 +509,6 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
 
                 % Put a human-readable version in the public properties
                 obj.bootTimeUTC = datestr(obj.bootDatenumUTC, 'yyyy-mm-dd HH:MM:SS');
-                %obj.bootTimeUTC = datestr(obj.bootDatenumUTC, 'yyyy-mm-dd HH:MM:SS.FFF');
             end                
         end
         
