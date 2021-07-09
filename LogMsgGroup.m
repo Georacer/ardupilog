@@ -13,16 +13,54 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         fieldMultipliers = struct();
         name = ''; % Human readable name of msg group
         LineNo = [];
+        MsgInstance = 0; % Some messages refer to multiple instances of the same format.
     end
     properties (Dependent = true)
         TimeS; % Time in seconds since boot.
         DatenumUTC; % MATLAB datenum of UTC Time at boot
     end
+    properties (Constant = true, Access = {?Ardupilog})        
+        instancedMessages = struct(... % Strcut with messages that carry multiple instances and the identifying field
+            'XKF0', 'C',...
+            'XKF1', 'C',...
+            'XKF2', 'C',...
+            'XKF3', 'C',...
+            'XKF4', 'C',...
+            'XKF5', 'C',...
+            'XKFD', 'C',...
+            'XKFM', 'C',...
+            'XKFS', 'C',...
+            'XKQ', 'C',...
+            'XKT', 'C',...
+            'XKTV', 'C',...
+            'XKV1', 'C',...
+            'XKV2', 'C',...
+            'XKY0', 'C',...
+            'XKY1', 'C',...
+            'KY0', 'C',...
+            'KY1', 'C',...
+            'NKF0', 'C',...
+            'NKF1', 'C',...
+            'NKF2', 'C',...
+            'NKF3', 'C',...
+            'NKF4', 'C',...
+            'NKF5', 'C',...
+            'NKQ', 'C',...
+            'NKT', 'C',...
+            'NKY0', 'C',...
+            'NKY1', 'C',...
+            'ESC', 'Instance'...
+            );
+    end
+    
     methods
-        function obj = LogMsgGroup(type_num, type_name, data_length, format_string, field_names_string)
+        function obj = LogMsgGroup(type_num, type_name, data_length, format_string, field_names_string, instance)
             if nargin == 0
                 % This is an empty constructor, MATLAB requires it to exist
                 return
+            end
+            if nargin > 5 % instance was passed
+                obj.MsgInstance = instance;
             end
             obj.storeFormat(type_num, type_name, data_length, format_string, field_names_string);
         end
@@ -248,6 +286,16 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
         function datenumUTC = get.DatenumUTC(obj)
             datenumUTC = obj.bootDatenumUTC + obj.TimeS/60/60/24;
         end
+        
+        function [answer, instanceFieldName] = isInstanced(obj)
+            if ~isfield(obj.instancedMessages, obj.name)
+                answer = false;
+                instanceFieldName = '';
+            else
+                answer = true;
+                instanceFieldName = obj.instancedMessages.(obj.name);
+            end
+        end
 
         function [slice, remainder] = getSlice(obj, slice_values, slice_type)
         % This returns an indexed portion (a "slice") of a LogMsgGroup
@@ -261,15 +309,23 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
                 % Find indices corresponding to slice_values, from slice_type
                 switch slice_type
                   case 'LineNo'
-                    start_ndx = find(obj.LineNo >= slice_values(1),1,'first');
-                    end_ndx = find(obj.LineNo <= slice_values(2),1,'last');
+                      start_ndx = find(obj.LineNo >= slice_values(1),1,'first');
+                      end_ndx = find(obj.LineNo <= slice_values(2),1,'last');
+                      slice_ndx = start_ndx:1:end_ndx;
                   case 'TimeS'
-                    start_ndx = find(obj.TimeS >= slice_values(1),1,'first');
-                    end_ndx = find(obj.TimeS <= slice_values(2),1,'last');
+                      start_ndx = find(obj.TimeS >= slice_values(1),1,'first');
+                      end_ndx = find(obj.TimeS <= slice_values(2),1,'last');
+                      slice_ndx = start_ndx:1:end_ndx;
+                  case 'MsgInstance'
+                      targetInstance = slice_values;
+                      [isInstanced, instanceFieldName] = obj.isInstanced();
+                      if ~isInstanced
+                          error('Message does not support instances');
+                      end
+                      slice_ndx = find(obj.(instanceFieldName)==targetInstance);
                   otherwise
-                    error(['Unsupported slice type: ', slice_type]);
+                      error(['Unsupported slice type: ', slice_type]);
                 end
-                slice_ndx = [start_ndx:1:end_ndx];
             else
                 slice_ndx = [];
             end

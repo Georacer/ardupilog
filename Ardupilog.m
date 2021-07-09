@@ -21,8 +21,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
         bootDatenumUTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
-
-    end %properties
+    end
     
     methods
         function obj = Ardupilog(varargin)
@@ -214,6 +213,9 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 
                 % Write to the LogMsgGroup
                 obj.(msgName).setLineNo(msg_LineNo);
+                % Check if message is instanced. If yes, create the other
+                % instances too.
+                obj.addLogMsgGroupInstances(obj.(msgName));
             end
             
             % Update the number of actual included messages
@@ -331,6 +333,44 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             FMTName = obj.fmt_cell{fmt_ndx, 2};
             % Store msgData correctly in that LogMsgGroup
             obj.(FMTName).storeData(data);
+        end
+        
+        % Create another instance of the passed log message group
+        % Does nothing if no instances are present
+        function [] = addLogMsgGroupInstances(obj, logMsgGroup)
+            
+            [isInstanced, instanceFieldName] = logMsgGroup.isInstanced();
+            if ~isInstanced
+                return;
+            end
+            instances = unique(logMsgGroup.(instanceFieldName));
+            if length(instances)>1
+                allMessages = copy(logMsgGroup);
+                firstInstance = true;
+                for instance = instances'
+                    if firstInstance
+                        msgName = logMsgGroup.name;
+                    else
+                        msgName = obj.buildMsgInstanceName(logMsgGroup.name, instance);
+                    end
+                    % Isolate the messages that refer to the current
+                    % instance
+                    new_msg_group = allMessages.getSlice(instance, 'MsgInstance');
+                    if ~firstInstance
+                        addprop(obj, msgName);
+                        obj.msgsContained{end+1} = msgName;
+                    end
+                    obj.(msgName) = new_msg_group;
+                    obj.(msgName).MsgInstance = instance;
+                    if firstInstance
+                        firstInstance = false;
+                    end
+                end
+            end
+        end
+        
+        function msgName = buildMsgInstanceName(~, msgName, instance)
+            msgName = [msgName sprintf('_%d',instance)];
         end
         
         function [] = buildMsgUnitFormats(obj)
