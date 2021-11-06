@@ -343,6 +343,13 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             if ~isInstanced
                 return;
             end
+            % Safeguard for older log versions that didn't support
+            % instances in the past: Make sure the instance field actually
+            % exists.
+            if ~isfield(logMsgGroup, instanceFieldName)
+                return
+            end
+            
             instances = unique(logMsgGroup.(instanceFieldName));
             if length(instances)>1
                 allMessages = copy(logMsgGroup);
