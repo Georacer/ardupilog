@@ -7,3 +7,13 @@
 /*.BIN
 /*.log
 /*.tlog
+
+# All logs in the testing directory
+/testing/*.bin
+/testing/*.BIN
+/testing/*/*.bin
+/testing/*/*.BIN
+/testing/test_results.txt
+
+# The logs directory, it's meant for the user
+/logs/*

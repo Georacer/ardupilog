@@ -513,6 +513,8 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             if ~isempty(obj.GPS.(timestr))
                 % Get the first valid time data from the log
                 first_ndx = find(obj.GPS.(wkstr) > 0, 1, 'first');
+            else
+                first_ndx = [];
             end
             if ~isempty(first_ndx)
             
