@@ -846,7 +846,65 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
         end
         
+
+        function newAxisHandle = fft(obj, msgFieldName, style, axisHandle)
+        % Plot a Fourier transform timeseries of a message field
+        % INPUTS:
+        % MsgFieldName - the msg/field given in the format 'MsgNameString/FieldNameString'
+        % style - the style argument to pass to the plot command
+        % axisHandle - (optionally empty) the axis handle to plot at
+            [messageName, fieldName] = splitMsgField(msgFieldName);
+            
+            % Check invalid arguments
+            if ~ismember(messageName, obj.msgsContained)
+                error('Requested message does not exist in log');
+            end 
+            if ~ismember(fieldName, obj.(messageName).fieldNameCell)
+                error('%s is not a member of %s data fields', fieldName, messageName);
+            end
+            
+            % Set default argument values
+            if nargin<3
+                style = '';
+            end
+            if nargin<4
+                axisHandle = [];
+            end
+            
+            if ~isnumeric(obj.(messageName).(fieldName))
+                error('Requested plot of non-numeric message');
+            end
+            
+            % Generate the FFT
+            Ts = mean(diff(obj.(messageName).TimeS));
+            Fs = 1/Ts;
+            L = length(obj.(messageName).TimeS);
+            Y = fft(obj.(messageName).(fieldName) - mean(obj.(messageName).(fieldName)));
+            P2 = abs(Y/L);
+            P1 = P2(1:L/2+1);
+            P1(2:end+-1) = 2*P1(2:end-1);
+            f = Fs*(0:(L/2))/L;
+            
+            if isempty(axisHandle)
+                fh = figure();
+                newAxisHandle = axes(fh);                
+                plot(f, P1, style);                
+                xlabel('Frequency (Hz)');
+                label = obj.getLabel(msgFieldName);
+                if ~isempty(label)
+                    ylabel(label);
+                end
+                grid on;
+                hold on;
+            else
+                plot(axisHandle, f, P1, style);
+                newAxisHandle = axisHandle;
+            end
+        end
+        
     end
+           
+    
     
     methods(Access=protected)
         
