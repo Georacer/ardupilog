@@ -6,6 +6,8 @@ num_files = length(files);
 
 % Allocate results
 examined_versions = {};
+logs = [];
+log_names = {};
 
 i=0;
 while i<length(files)
@@ -36,7 +38,9 @@ while i<length(files)
     % Parse log
     fprintf('------------------------------------------------\n');
     fprintf('Parsing File: %s\n', filepath);
+    log_names{end+1} = filename;
     log = Ardupilog(fullfile(cur_file.folder, filename));
+    logs = [logs log];
     fprintf('Platform: %s\nVersion: %s\n', log.platform, log.version);
     
     log_metadata = [log.platform ': ' log.version];
