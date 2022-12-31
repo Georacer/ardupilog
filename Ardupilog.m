@@ -319,7 +319,11 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                     warning('Msg group %d/%s could not be created', newType, newName);
                 else
                     obj.msgsContained{end+1} = newName;
-                    addprop(obj, newName);
+					try
+						addprop(obj, newName);
+					catch
+						warning('duplicated %d/%s', newType, newName);
+					end
                     obj.(newName) = new_msg_group;
                 end
                
