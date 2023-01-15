@@ -46,6 +46,12 @@ For example, to plot the `Pitch` field from the `AHR2` message in red, enter:
 log.plot('AHR2/Pitch', 'r');
 ```
 
+and to plot more than one series in the same figure, you can capture the axis handle of the first plot:
+```matlab
+ah = log.plot('AHR2/Roll');
+log.plot('AHR2/Pitch', 'r', ah);
+```
+
 ### Message Filter
 You can optionally filter the log file for specific message types:
 ```matlab
@@ -86,7 +92,7 @@ log_struct = log.getStruct();
 
 ### Supported log versions
 Logs from the following versions are been tested for Continuous Integration:
-* Copter: 3.6.9, 4.0.0, 4.1.0
+* Copter: 3.6.9, 4.0.0, 4.1.0, 4.3.2
 * Plane: 3.5.2, 3.7.1, 3.8.2, 3.9.9, 4.0.0, 4.1.0
 * Rover: 4.0.0, 4.1.0
 
