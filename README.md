@@ -92,7 +92,7 @@ log_struct = log.getStruct();
 
 ### Supported log versions
 Logs from the following versions are been tested for Continuous Integration:
-* Copter: 3.6.9, 4.0.0, 4.1.0
+* Copter: 3.6.9, 4.0.0, 4.1.0, 4.3.2
 * Plane: 3.5.2, 3.7.1, 3.8.2, 3.9.9, 4.0.0, 4.1.0
 * Rover: 4.0.0, 4.1.0
 
