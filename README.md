@@ -46,6 +46,12 @@ For example, to plot the `Pitch` field from the `AHR2` message in red, enter:
 log.plot('AHR2/Pitch', 'r');
 ```
 
+and to plot more than one series in the same figure, you can capture the axis handle of the first plot:
+```matlab
+ah = log.plot('AHR2/Roll');
+log.plot('AHR2/Pitch', 'r', ah);
+```
+
 ### Message Filter
 You can optionally filter the log file for specific message types:
 ```matlab
