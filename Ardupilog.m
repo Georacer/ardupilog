@@ -318,12 +318,15 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 if isempty(new_msg_group)
                     warning('Msg group %d/%s could not be created', newType, newName);
                 else
-                    obj.msgsContained{end+1} = newName;
 					try
 						addprop(obj, newName);
+                        obj.msgsContained{end+1} = newName;
                     catch ME
                         if strcmp(ME.identifier,'MATLAB:class:PropertyInUse')
                             warning('Duplicate message %d/%s definition', newType, newName);
+                        elseif strcmp(ME.identifier,'MATLAB:ClassUstring:InvalidDynamicPropertyName')
+                            warning('Message name cannot be assigned to variable (Type:%d, Name:%s)', newType, newName);
+                            continue;
                         else
                             rethrow(ME);
                         end
