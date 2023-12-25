@@ -59,8 +59,7 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
                 % Put field format char (e.g. Q, c, b, h, etc.) into 'Description' field
                 obj.fieldInfo(end).Description = format_string(ndx);
             end
-
-            % Save FMT data into private properties (Not actually used anywhere?)
+            
             obj.typeNumID = type_num;
             obj.name = type_name;
             obj.data_len = data_length;
@@ -327,7 +326,47 @@ classdef LogMsgGroup < dynamicprops & matlab.mixin.Copyable
             slice.fieldUnits = obj.fieldUnits;
             slice.fieldMultipliers = obj.fieldMultipliers;
         end
+        
+        function [] = fixCorruptTimestamps(obj)
+        % Ensure that the timestamps are monotonic.
+        % This is achieved by deleting any messages whose timestamps are
+        % local maxima in the time vector.
+        % Non-monotonicity is usually caused by corrupt timestamps.
+                               
+            % Retrieve the timestamp vector
+            if isprop(obj, 'TimeUS')
+                time_vec = obj.TimeUS;
+            elseif isprop(obj, 'TimeMS')
+                time_vec = obj.TimeMS;
+            else
+                return; % No timestamp to be found.
+            end
+            
+            % Ensure there are at least 3 samples to check for maxima.
+            if length(time_vec) < 3
+                return;
+            end
+            
+            % Find the local maxima
+            [~, corrupt_locs] = findpeaks(time_vec);
+            
+            % Delete the samples at the peaks.
+            if isempty(corrupt_locs)
+                return;
+            else
+                % For each data field, delete the samples with corrupt
+                % timestamps.
+                for field_name = obj.fieldNameCell
+                    obj.(field_name{1})(corrupt_locs) = [];
+                end
+                % Update also the LineNo vector.
+                obj.LineNo(corrupt_locs) = [];
+            end
+            warning('Found and deleted %d corrupt timestamp(s) in msg %s', length(corrupt_locs), obj.name);
+            return;
+        end
     end
+    
     methods(Access=protected)
         function cpObj = copyElement(obj)
         % Makes copy() into a "deep copy" method (i.e. when copying

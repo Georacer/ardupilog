@@ -218,6 +218,17 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 obj.addLogMsgGroupInstances(obj.(msgName));
             end
             
+            % Delete corrupt timestamps
+            for i = 1:size(obj.valid_msgheader_cell,1)
+                % Find msgName from msgId in 1st column
+                msgId = obj.valid_msgheader_cell{i,1};
+                row_in_fmt_cell = vertcat(obj.fmt_cell{:,1})==msgId;
+                msgName = obj.fmt_cell{row_in_fmt_cell,2};
+                if obj.(msgName).data_len > 0
+                    obj.(msgName).fixCorruptTimestamps();
+                end
+            end
+            
             % Update the number of actual included messages
             propNames = properties(obj);
             for i = 1:length(propNames)
