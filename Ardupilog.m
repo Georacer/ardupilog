@@ -1030,7 +1030,36 @@ function modeStruct = FlightModes(v_type)
     % ArduRover, ArduSub, ArduBlimp}
     % 
     % OUTPUTS:
-    % modeStruct: container.Map object, mapping a mode index 
+    % modeStruct: A struct containing mode information.
+    
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduPlane/mode.h
+    PlaneModes = {
+            'MANUAL'       , 0, [0.00	0       1.00];
+            'CIRCLE'       , 1, [0.75	0.75	0];
+            'STABILIZE'    , 2, [1.00	0       0];
+            'TRAINING'     , 3, [0.00	0       0];
+            'ACRO'         , 4, [0.25	0.25	0.25];
+            'FLY_BY_WIRE_A', 5, [0       0.75	0.75];
+            'FLY_BY_WIRE_B', 6, [0.75	0.25	0.25];
+            'CRUISE'       , 7, [0.95	0.95	0];
+            'AUTOTUNE'     , 8, [0.25	0.25	0.75];
+            'AUTO'         , 10, [0.75	0.75	0.75];
+            'RTL'          , 11, [0.00	1       0];
+            'LOITER'       , 12, [0.76	0.57	0.17];
+            'TAKEOFF'      , 13, [0.75	0       0.75];
+            'AVOID_ADSB'   , 14, [0       0.5     0];
+            'GUIDED'       , 15, [0.54	0.63	0.22];
+            'INITIALISING' , 16, [0.34	0.57	0.92];
+            'QSTABILIZE'   , 17, [1.00	0.1     0.6];
+            'QHOVER'       , 18, [0.88	0.75	0.73];
+            'QLOITER'      , 19, [0.10	0.49	0.47];
+            'QLAND'        , 20, [0.66	0.34	0.65];
+            'QRTL'         , 21, [0.99	0.41	0.23];
+            'QAUTOTUNE'    , 22, [0.58	0.49	0.25];
+            'QACRO'        , 23, [0.10    0.49    0.47];
+            'THERMAL'      , 24, [0.66    0.34    0.65];
+            'LOITER_ALT_QLAND', 25, [0.99    0.41    0.23];
+        };
     
     % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduCopter/mode.h
     CopterModes = {
@@ -1063,7 +1092,62 @@ function modeStruct = FlightModes(v_type)
         'TURTLE',       28, [0.23    0.77    1.00];  % Flip over after crash
     };
 
-    modeStruct = CopterModes;
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/Rover/mode.h
+    RoverModes = {
+        'MANUAL'      , 0, [0.00	0       1.00];
+        'ACRO'        , 1, [0.75	0.75	0];
+        'STEERING'    , 3, [1.00	0       0];
+        'HOLD'        , 4, [0.00	0       0];
+        'LOITER'      , 5, [0.25	0.25	0.25];
+        'FOLLOW'      , 6, [0       0.75	0.75];
+        'SIMPLE'      , 7, [0.75	0.25	0.25];
+        'DOCK'        , 8, [0.95	0.95	0];
+        'CIRCLE'      , 9, [0.25	0.25	0.75];
+        'AUTO'        , 10, [0.75	0.75	0.75];
+        'RTL'         , 11, [0.00	1       0];
+        'SMART_RTL'   , 12, [0.76	0.57	0.17];
+        'GUIDED'      , 15, [0.75	0       0.75];
+        'INITIALISING', 16, [0       0.5     0];
+    };
+    
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduSub/mode.h
+    SubModes = {
+        'STABILIZE',     0, [0.00	0       1.00];  % manual angle with manual depth/throttle
+        'ACRO',          1, [0.75	0.75	0];  % manual body-frame angular rate with manual depth/throttle
+        'ALT_HOLD',      2, [1.00	0       0];  % manual angle with automatic depth/throttle
+        'AUTO',          3, [0.00	0       0];  % fully automatic waypoint control using mission commands
+        'GUIDED',        4, [0.25	0.25	0.25];  % fully automatic fly to coordinate or fly at velocity/direction using GCS immediate commands
+        'CIRCLE',        7, [0       0.75	0.75];  % automatic circular flight with automatic throttle
+        'SURFACE',       9, [0.75	0.25	0.25];  % automatically return to surface, []; pilot maintains horizontal control
+        'POSHOLD',      16, [0.95	0.95	0];  % automatic position hold with manual override, []; with automatic throttle
+        'MANUAL',       19, [0.25	0.25	0.75];  % Pass-through input with no stabilization
+        'MOTOR_DETECT', 20, [0.75	0.75	0.75];  % Automatically detect motors orientation
+        'SURFTRAK',     21, [0.00	1       0];   % Track distance above seafloor (hold range)
+    };
+
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/Blimp/mode.h
+    BlimpModes = {
+        'LAND',          0, [0.00	0       1.00];  % currently just stops moving
+        'MANUAL',        1, [0.75	0.75	0];  % manual control
+        'VELOCITY',      2, [1.00	0       0];  % velocity mode
+        'LOITER',        3, [0.00	0       0];  % loiter mode (position hold)
+        'RTL',           4, [0.25	0.25	0.25];  % rtl
+    };
+    
+    switch v_type
+        case 'ArduCopter'
+            modeStruct = CopterModes;
+        case 'ArduPlane'
+            modeStruct = PlaneModes;
+        case 'ArduRover'
+            modeStruct = RoverModes;
+        case 'ArduSub'
+            modeStruct = SubModes;
+        case 'ArduBlimp'
+            modeStruct = BlimpModes;
+        otherwise
+            error('Unsupported mode map for vehicle type %s', v_type);
+    end
 end
 
 
