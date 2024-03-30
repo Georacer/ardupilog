@@ -1201,26 +1201,27 @@ end
 function txt = myupdatefcn(~,event_obj)
 % Customizes text of data tips
     pos = get(event_obj,'Position');
-    I   = get(event_obj, 'DataIndex');
-    txt = {['X: ',num2str(pos(1))],...
-       ['Y: ',num2str(pos(2))]};
 
-    % If there is a Z-coordinate in the position, display it as well
-    if length(pos) > 2
-     txt{end+1} = ['Z: ',num2str(pos(3))];
+    % If the tag field of the selected object is not blank, it means that
+    % we are clicking on a mode change line.
+    if ~isempty(event_obj.Target.Tag)
+        txt = {['Time: ',num2str(pos(1))],...
+            ['Mode: ', event_obj.Target.Tag]
+            };
+    else % This is just a normal datapoint.
+        txt = {['X: ',num2str(pos(1))],...
+           ['Y: ',num2str(pos(2))]
+           };
+
+        % If there is a Z-coordinate in the position, display it as well
+        if length(pos) > 2
+            txt{end+1} = ['Z: ',num2str(pos(3))];
+        end
     end
 
-    % If the tag field of the selected object is not blank, display it
-    temp = event_obj.Target.Tag;
-
-    if ~isempty(temp)
-       txt{end+1} = temp;
-    end
 
     % If the userdata field is not blank, display it
-
     temp = event_obj.Target.UserData;
-
     if ~isempty(temp)
         txt{end+1} = ['T: ' num2str(temp,'%.2f')];
     end
