@@ -849,7 +849,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % Outputs:
         %   ht : handle to graphics indicating mode change
         %
-            % Get the map of control mode for ArduCopter
+            % Get the map of control mode for the correct platform
+            if isempty(obj.platform)
+                return
+            end
             modesStruct  = FlightModes(obj.platform);
             numModeChanges = length(mode);
             
@@ -1191,7 +1194,7 @@ end
 
 
 function CustomDataCursor(fh, varargin)
-% CustomDataCursor Customize data cursor for a figure
+% Assign a custom data tip message for a Figure.
 
 dcm_obj = datacursormode(fh);
 set(dcm_obj,'UpdateFcn',{@myupdatefcn})
@@ -1199,7 +1202,7 @@ end
 
 
 function txt = myupdatefcn(~,event_obj)
-% Customizes text of data tips
+% Customizes text of data tips.
     pos = get(event_obj,'Position');
 
     % If the tag field of the selected object is not blank, it means that
@@ -1218,7 +1221,6 @@ function txt = myupdatefcn(~,event_obj)
             txt{end+1} = ['Z: ',num2str(pos(3))];
         end
     end
-
 
     % If the userdata field is not blank, display it
     temp = event_obj.Target.UserData;
