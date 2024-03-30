@@ -835,7 +835,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             obj.flagPlotModes = false;
         end
         
-        function ht = PlotModeChanges(obj, modeTime, mode, varargin)
+        function ht = PlotModeChanges(obj, modeTime, mode, axh)
         % PlotModeChanges   Plot vertical lines when control mode changes using flight
         % data from ArduCopter
         %
@@ -849,33 +849,20 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         % Outputs:
         %   ht : handle to graphics indicating mode change
         %
-            plotOpt = [];
-            if isempty(varargin)
-                axh = gca;
-            elseif nargin >= 3
-                plotOpt = varargin(2:end);
-                axh = varargin{1};
-            end
-
-            if ~ishold(axh)
-                hold(axh,'on')
-            end
-
+            % Get the map of control mode for ArduCopter
+            modesStruct  = FlightModes(obj.platform);
+            numModeChanges = length(mode);
+            
+            hold(axh,'on')
             ylim = get(axh, 'Ylim');
 
-            % Get the map of control mode for ArduCopter
-            fmodeNum  = ArduCopterMode;
-
-            numMode = length(mode);
-
-            for kk = 1:numMode
-                ht = plot(axh, modeTime(kk)*ones(1,2), ylim, plotOpt{:});
-                ht.Color = [fmodeNum(mode(kk)).Col, 0.5];
-                ht.Tag   = fmodeNum(mode(kk)).Val;
+            for idx = 1:numModeChanges
+                ht = plot(axh, modeTime(idx)*ones(1,2), ylim);
+                ht.Color = [getModeColour(modesStruct, mode(idx)), 0.5];
+                ht.Tag   = getModeName(modesStruct, mode(idx));
             end
             % set the data cursor to display the mode type
             figh = GetFigureHandle(axh);
-
             CustomDataCursor(figh);
 
         end
@@ -985,8 +972,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
         end
         
-    end
-           
+    end           
     
     
     methods(Access=protected)
@@ -1036,73 +1022,77 @@ function [messageName, fieldName] = splitMsgField(string)
 end
 
         
-function modeOut = ArduCopterMode(flag)
+function modeStruct = FlightModes(v_type)
     % Return the flight mode number used in ArduCopter
-    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduCopter/mode.h
     %
-    % Inputs : flag (0,1) (optional) sets numeric mode as the key (default) or
-    % text description (flag = 1)
+    % INPUTS:
+    % v_type: String with the vehicle type. One of {ArduPlane, ArduCopter,
+    % ArduRover, ArduSub, ArduBlimp}
     % 
-    % Outputs: modeOut : container.Map object
+    % OUTPUTS:
+    % modeStruct: container.Map object, mapping a mode index 
+    
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduCopter/mode.h
+    CopterModes = {
+        % name, index, colour
+        'STABILIZE',     0, [0.00	0       1.00];  % blue, manual airframe angle with manual throttle
+        'ACRO',          1, [0.75	0.75	0];  % yellowish gold, manual body-frame angular rate with manual throttle
+        'ALT_HOLD',      2, [1.00	0       0];  % red, manual airframe angle with automatic throttle
+        'AUTO',          3, [0.00	0       0];  % black, fully automatic waypoint control using mission commands
+        'GUIDED',        4, [0.25	0.25	0.25];  % fully automatic fly to coordinate or fly at velocity/direction using GCS immediate commands
+        'LOITER',        5, [0       0.75	0.75];  % teal, automatic horizontal acceleration with automatic throttle
+        'RTL',           6, [0.75	0.25	0.25];  % brick red, automatic return to launching point
+        'CIRCLE',        7, [0.95	0.95	0];  % yellow, automatic circular flight with automatic throttle
+        'LAND',          9, [0.25	0.25	0.75];  % automatic landing with horizontal position control
+        'DRIFT',        11, [0.75	0.75	0.75];  % semi-autonomous position, yaw and throttle control
+        'SPORT',        13, [0.00	1       0];  % bright green, manual earth-frame angular rate control with manual throttle
+        'FLIP',         14, [0.76	0.57	0.17];  % automatically flip the vehicle on the roll axis
+        'AUTOTUNE',     15, [0.75	0       0.75];  % purple, automatically tune the vehicle's roll and pitch gains
+        'POSHOLD',      16, [0       0.5     0];  % dark green, automatic position hold with manual override, with automatic throttle
+        'BRAKE',        17, [0.54	0.63	0.22];  % full-brake using inertial/GPS system, no pilot input
+        'THROW',        18, [0.34	0.57	0.92];  % throw to launch mode using inertial/GPS system, no pilot input
+        'AVOID_ADSB',   19, [1.00	0.1     0.6];  % automatic avoidance of obstacles in the macro scale - e.g. full-sized aircraft
+        'GUIDED_NOGPS', 20, [0.88	0.75	0.73];  % guided mode but only accepts attitude and altitude
+        'SMART_RTL',    21, [0.10	0.49	0.47];  % SMART_RTL returns to home by retracing its steps
+        'FLOWHOLD ',    22, [0.66	0.34	0.65];  % FLOWHOLD holds position with optical flow without rangefinder
+        'FOLLOW   ',    23, [0.99	0.41	0.23];  % follow attempts to follow another vehicle or ground station
+        'ZIGZAG   ',    24, [0.58	0.49	0.25];  % ZIGZAG mode is able to fly in a zigzag manner with predefined point A and point B
+        'SYSTEMID ',    25, [0.10    0.49    0.47];  % System ID mode produces automated system identification signals in the controllers
+        'AUTOROTATE',   26, [0.66    0.34    0.65];  % Autonomous autorotation
+        'AUTO_RTL',     27, [0.99    0.41    0.23];  % Auto RTL, this is not a true mode, AUTO will report as this mode if entered to perform a DO_LAND_START Landing sequence
+        'TURTLE',       28, [0.23    0.77    1.00];  % Flip over after crash
+    };
 
-    valueSet = {'STABILIZE','ACRO','ALT_HOLD','AUTO','GUIDED','LOITER','RTL','CIRCLE',...
-        'LAND','DRIFT','SPORT','FLIP','AUTOTUNE','POSHOLD','BRAKE','THROW','AVOID_ADSB',...
-        'GUIDED_NOGPS','SMART_RTL','FLOWHOLD','FOLLOW','ZIGZAG','SYSTEMID', 'HELI_AUTOROTATE', 'AUTORTL'};
-    keySet = [0:1:7, 9, 11, 13:1:27];
+    modeStruct = CopterModes;
+end
 
 
-    colororder = [
-        0.00	0       1.00        % Stab, blue
-        0.75	0.75	0           % Acro, yellowish gold
-        1.00	0       0           % alt hold, red
-        0.00	0       0           % auto, black
-        0.25	0.25	0.25        % guided
-        0       0.75	0.75        % loiter, teal 
-        0.75	0.25	0.25        % RTL, brick red
-        0.95	0.95	0           % circle, yellow
-        0.25	0.25	0.75        % land
-        0.75	0.75	0.75        % drift
-        0.00	1       0           % sport, bright green
-        0.76	0.57	0.17        % flip,
-        0.75	0       0.75        % autotune, purple
-        0       0.5     0           % poshold, dark green
-        0.54	0.63	0.22        % brake
-        0.34	0.57	0.92        % throw
-        1.00	0.1     0.6         % avoid
-        0.88	0.75	0.73        % guided_nogps
-        0.10	0.49	0.47        % smart rtl
-        0.66	0.34	0.65        % flowhold
-        0.99	0.41	0.23        % follow
-        0.58	0.49	0.25        % zigzag
-        0.10    0.49    0.47        % systemid
-        0.66    0.34    0.65        % heli autorotate
-        0.99    0.41    0.23        % autortl
-    ];
+function modeName = getModeName(modeStruct, modeNo)
+% Retrieve the mode name from the mode map.
+%
+% INPUTS:
+% modeStruct: The output of FlightModes().
+%
+% OUTPUTS:
+% modeName: A string with the mode name.
+    names = modeStruct(:,1);
+    indices = cell2mat(modeStruct(:,2));
+    index = find(indices==modeNo, 1);
+    modeName = names{index};
+end
 
-    scell = cell(length(keySet),1);
-    for kk = 1:length(keySet)
-        eval(['s' num2str(kk) '.Col = colororder(kk,:);'])
-        eval(['s' num2str(kk) '.Val = valueSet{kk};'])
-        scell{kk} = eval(['s' num2str(kk)]);
-    end
-
-    if ~exist('flag','var')
-    %     modeOut = containers.Map(keySet, valueSet);
-        modeOut = containers.Map(keySet, scell);
-    else
-        if flag == 0
-            modeOut = containers.Map(keySet, valueSet);
-        else
-            scell = cell(length(keySet),1);
-            for kk = 1:length(keySet)
-                eval(['s' num2str(kk) '.Col = colororder(kk,:);'])
-                eval(['s' num2str(kk) '.Val = keySet(kk);'])
-                scell{kk} = eval(['s' num2str(kk)]);
-            end
-    %         modeOut = containers.Map(valueSet, keySet);
-            modeOut = containers.Map(valueSet, scell);
-        end
-    end
+function modeColour = getModeColour(modeStruct, modeNo)
+% Retrieve the mode name from the mode map.
+%
+% INPUTS:
+% modeStruct: The output of FlightModes().
+%
+% OUTPUTS:
+% modeColour: An array with an RGB specification.
+    colours = modeStruct(:,3);
+    indices = cell2mat(modeStruct(:,2));
+    index = find(indices==modeNo, 1);
+    modeColour = colours{index};
 end
 
 
@@ -1113,4 +1103,41 @@ function figh = GetFigureHandle(ob)
         temp = GetFigureHandle(temp);
     end
     figh = temp;
+end 
+
+
+function CustomDataCursor(fh, varargin)
+% CustomDataCursor Customize data cursor for a figure
+
+dcm_obj = datacursormode(fh);
+set(dcm_obj,'UpdateFcn',{@myupdatefcn})
+end
+
+
+function txt = myupdatefcn(~,event_obj)
+% Customizes text of data tips
+    pos = get(event_obj,'Position');
+    I   = get(event_obj, 'DataIndex');
+    txt = {['X: ',num2str(pos(1))],...
+       ['Y: ',num2str(pos(2))]};
+
+    % If there is a Z-coordinate in the position, display it as well
+    if length(pos) > 2
+     txt{end+1} = ['Z: ',num2str(pos(3))];
+    end
+
+    % If the tag field of the selected object is not blank, display it
+    temp = event_obj.Target.Tag;
+
+    if ~isempty(temp)
+       txt{end+1} = temp;
+    end
+
+    % If the userdata field is not blank, display it
+
+    temp = event_obj.Target.UserData;
+
+    if ~isempty(temp)
+        txt{end+1} = ['T: ' num2str(temp,'%.2f')];
+    end
 end
