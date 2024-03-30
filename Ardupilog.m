@@ -21,6 +21,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
         bootDatenumUTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
+        flagPlotModes = true;
     end
     
     methods
@@ -821,7 +822,63 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 label = '';
             end
         end
+        
+        
+        function enableModePlot(obj)
+        % Enable plotting of flight mode change indications.
+            obj.flagPlotModes = true;
+        end
+        
+        
+        function disableModePlot(obj)
+        % Enable plotting of flight mode change indications.
+            obj.flagPlotModes = false;
+        end
+        
+        function ht = PlotModeChanges(obj, modeTime, mode, varargin)
+        % PlotModeChanges   Plot vertical lines when control mode changes using flight
+        % data from ArduCopter
+        %
+        % Inputs:
+        %   modeTime : [vector] (sec) time when mode change occurs
+        %   mode     : [vector] numerical value indicating mode
+        %   axh      : [scalar] axis handle for plotting - if empty use current figure
+        %   varargin(2:end) : Name-value pair arguments to format the vertical lines
+        %                     indicating mode change
+        %   
+        % Outputs:
+        %   ht : handle to graphics indicating mode change
+        %
+            plotOpt = [];
+            if isempty(varargin)
+                axh = gca;
+            elseif nargin >= 3
+                plotOpt = varargin(2:end);
+                axh = varargin{1};
+            end
 
+            if ~ishold(axh)
+                hold(axh,'on')
+            end
+
+            ylim = get(axh, 'Ylim');
+
+            % Get the map of control mode for ArduCopter
+            fmodeNum  = ArduCopterMode;
+
+            numMode = length(mode);
+
+            for kk = 1:numMode
+                ht = plot(axh, modeTime(kk)*ones(1,2), ylim, plotOpt{:});
+                ht.Color = [fmodeNum(mode(kk)).Col, 0.5];
+                ht.Tag   = fmodeNum(mode(kk)).Val;
+            end
+            % set the data cursor to display the mode type
+            figh = GetFigureHandle(axh);
+
+            CustomDataCursor(figh);
+
+        end
 
         function newAxisHandle = plot(obj, msgFieldName, style, axisHandle)
         % Plot a timeseries of a message field
@@ -865,6 +922,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             else
                 plot(axisHandle, obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
                 newAxisHandle = axisHandle;
+            end
+            
+            if obj.flagPlotModes
+                obj.PlotModeChanges(obj.MODE.TimeS, obj.MODE.Mode, newAxisHandle);
             end
         end
         
@@ -974,3 +1035,82 @@ function [messageName, fieldName] = splitMsgField(string)
     return;
 end
 
+        
+function modeOut = ArduCopterMode(flag)
+    % Return the flight mode number used in ArduCopter
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduCopter/mode.h
+    %
+    % Inputs : flag (0,1) (optional) sets numeric mode as the key (default) or
+    % text description (flag = 1)
+    % 
+    % Outputs: modeOut : container.Map object
+
+    valueSet = {'STABILIZE','ACRO','ALT_HOLD','AUTO','GUIDED','LOITER','RTL','CIRCLE',...
+        'LAND','DRIFT','SPORT','FLIP','AUTOTUNE','POSHOLD','BRAKE','THROW','AVOID_ADSB',...
+        'GUIDED_NOGPS','SMART_RTL','FLOWHOLD','FOLLOW','ZIGZAG','SYSTEMID', 'HELI_AUTOROTATE', 'AUTORTL'};
+    keySet = [0:1:7, 9, 11, 13:1:27];
+
+
+    colororder = [
+        0.00	0       1.00        % Stab, blue
+        0.75	0.75	0           % Acro, yellowish gold
+        1.00	0       0           % alt hold, red
+        0.00	0       0           % auto, black
+        0.25	0.25	0.25        % guided
+        0       0.75	0.75        % loiter, teal 
+        0.75	0.25	0.25        % RTL, brick red
+        0.95	0.95	0           % circle, yellow
+        0.25	0.25	0.75        % land
+        0.75	0.75	0.75        % drift
+        0.00	1       0           % sport, bright green
+        0.76	0.57	0.17        % flip,
+        0.75	0       0.75        % autotune, purple
+        0       0.5     0           % poshold, dark green
+        0.54	0.63	0.22        % brake
+        0.34	0.57	0.92        % throw
+        1.00	0.1     0.6         % avoid
+        0.88	0.75	0.73        % guided_nogps
+        0.10	0.49	0.47        % smart rtl
+        0.66	0.34	0.65        % flowhold
+        0.99	0.41	0.23        % follow
+        0.58	0.49	0.25        % zigzag
+        0.10    0.49    0.47        % systemid
+        0.66    0.34    0.65        % heli autorotate
+        0.99    0.41    0.23        % autortl
+    ];
+
+    scell = cell(length(keySet),1);
+    for kk = 1:length(keySet)
+        eval(['s' num2str(kk) '.Col = colororder(kk,:);'])
+        eval(['s' num2str(kk) '.Val = valueSet{kk};'])
+        scell{kk} = eval(['s' num2str(kk)]);
+    end
+
+    if ~exist('flag','var')
+    %     modeOut = containers.Map(keySet, valueSet);
+        modeOut = containers.Map(keySet, scell);
+    else
+        if flag == 0
+            modeOut = containers.Map(keySet, valueSet);
+        else
+            scell = cell(length(keySet),1);
+            for kk = 1:length(keySet)
+                eval(['s' num2str(kk) '.Col = colororder(kk,:);'])
+                eval(['s' num2str(kk) '.Val = keySet(kk);'])
+                scell{kk} = eval(['s' num2str(kk)]);
+            end
+    %         modeOut = containers.Map(valueSet, keySet);
+            modeOut = containers.Map(valueSet, scell);
+        end
+    end
+end
+
+
+function figh = GetFigureHandle(ob)
+    % Obtain the figure handle of an axis handle.
+    temp = ob.Parent;
+    if ~isa(temp, 'matlab.ui.Figure')
+        temp = GetFigureHandle(temp);
+    end
+    figh = temp;
+end
