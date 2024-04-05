@@ -3,6 +3,8 @@ An Ardupilot log to MATLAB converter. Primarily intended to facilitate processin
 
 It is very efficient: The time required to parse large logs is in the order of seconds.
 
+![cover](cover.png)
+
 ## Supported log formats
 Currently, only Dataflash logs (.bin files) are supported.
 
@@ -32,7 +34,7 @@ Each `LogMsgGroup` under a log contains the following members:
 ### Plotting
 To plot a specific numerical data field from a specific message, you can enter:
 ```matlab
-log.plot('<msgName>/<fieldName>');
+log.plot('<msgName>/<fieldName>')
 ```
 
 The full command allows for passnig a Matlab-style line style and an existing Axes Handle to plot in.
@@ -43,25 +45,39 @@ ah = log.plot('<msgName>/<fieldName>',<lineStyle>,<axesHandle>)
 
 For example, to plot the `Pitch` field from the `AHR2` message in red, enter:
 ```matlab
-log.plot('AHR2/Pitch', 'r');
+log.plot('AHR2/Pitch', 'r')
 ```
 
 and to plot more than one series in the same figure, you can capture the axis handle of the first plot:
 ```matlab
-ah = log.plot('AHR2/Roll');
-log.plot('AHR2/Pitch', 'r', ah);
+ah = log.plot('AHR2/Roll')
+log.plot('AHR2/Pitch', 'r', ah)
 ```
+
+#### Mode change lines
+
+By default `ardupilog` plots vertical lines that signify mode changes.
+You can inspect the mode name by clicking on them with the Data Cursor.
+
+You can disable mode line plotting with `log.disableModePlot();`
+
+You can re-enable mode line plotting with `log.enableModePlot();`
 
 ### Message Filter
 You can optionally filter the log file for specific message types:
 ```matlab
 log_filtered = log.filterMsgs(<msgFilter>)
-log_filtered = Ardupilog('<path-to-log', <msgFilter>)
+log_filtered = Ardupilog('<path-to-log>', <msgFilter>)
 ```
 
 `msgFilter` can be:
 * Either a vector of integers, representing the message IDs you want to convert.
 * Or a cell array of strings. Each string is the literal name of the message type.
+
+**Example**
+```matlab
+log_filtered = log.filterMsgs({'POS', 'AHR2'})
+```
 
 ### Slicing
 Typically, only a small portion of the flight log is of interest. Ardupilog supports *slicing* logs to a specific start-end interval with:
@@ -86,7 +102,7 @@ requires the `ardupilog` library to exist in the current MATLAB path.
 
 Creating a more basic struct file, free of the `ardupilog` dependency, is possible with:
 ```matlab
-log_struct = log.getStruct();
+log_struct = log.getStruct()
 ```
 `log_struct` does not need the `ardupilog` source code accompanying it to be shared.
 

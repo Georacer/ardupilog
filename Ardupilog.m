@@ -21,6 +21,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
         FMTLen = 89;
         valid_msgheader_cell = cell(0); % A cell array for reconstructing LineNo (line-number) for all entries
         bootDatenumUTC = NaN; % The MATLAB datenum (days since Jan 00, 0000) at APM microcontroller boot (TimeUS = 0)
+        flagPlotModes = true;
     end
     
     methods
@@ -821,7 +822,53 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
                 label = '';
             end
         end
+        
+        
+        function enableModePlot(obj)
+        % Enable plotting of flight mode change indications.
+            obj.flagPlotModes = true;
+        end
+        
+        
+        function disableModePlot(obj)
+        % Enable plotting of flight mode change indications.
+            obj.flagPlotModes = false;
+        end
+        
+        function ht = PlotModeChanges(obj, modeTime, mode, axh)
+        % PlotModeChanges   Plot vertical lines when control mode changes using flight
+        % data from ArduCopter
+        %
+        % Inputs:
+        %   modeTime : [vector] (sec) time when mode change occurs
+        %   mode     : [vector] numerical value indicating mode
+        %   axh      : [scalar] axis handle for plotting - if empty use current figure
+        %   varargin(2:end) : Name-value pair arguments to format the vertical lines
+        %                     indicating mode change
+        %   
+        % Outputs:
+        %   ht : handle to graphics indicating mode change
+        %
+            % Get the map of control mode for the correct platform
+            if isempty(obj.platform)
+                return
+            end
+            modesStruct  = FlightModes(obj.platform);
+            numModeChanges = length(mode);
+            
+            hold(axh,'on')
+            ylim = get(axh, 'Ylim');
 
+            for idx = 1:numModeChanges
+                ht = plot(axh, modeTime(idx)*ones(1,2), ylim);
+                ht.Color = [getModeColour(modesStruct, mode(idx)), 0.5];
+                ht.Tag   = getModeName(modesStruct, mode(idx));
+            end
+            % set the data cursor to display the mode type
+            figh = GetFigureHandle(axh);
+            CustomDataCursor(figh);
+
+        end
 
         function newAxisHandle = plot(obj, msgFieldName, style, axisHandle)
         % Plot a timeseries of a message field
@@ -865,6 +912,10 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             else
                 plot(axisHandle, obj.(messageName).TimeS, obj.(messageName).(fieldName), style);
                 newAxisHandle = axisHandle;
+            end
+            
+            if obj.flagPlotModes
+                obj.PlotModeChanges(obj.MODE.TimeS, obj.MODE.Mode, newAxisHandle);
             end
         end
         
@@ -924,8 +975,7 @@ classdef Ardupilog < dynamicprops & matlab.mixin.Copyable
             end
         end
         
-    end
-           
+    end           
     
     
     methods(Access=protected)
@@ -974,3 +1024,207 @@ function [messageName, fieldName] = splitMsgField(string)
     return;
 end
 
+        
+function modeStruct = FlightModes(v_type)
+    % Return the flight mode number used in ArduCopter
+    %
+    % INPUTS:
+    % v_type: String with the vehicle type. One of {ArduPlane, ArduCopter,
+    % ArduRover, ArduSub, ArduBlimp}
+    % 
+    % OUTPUTS:
+    % modeStruct: A struct containing mode information.
+    
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduPlane/mode.h
+    PlaneModes = {
+            'MANUAL'       , 0, [0.00	0       1.00];
+            'CIRCLE'       , 1, [0.75	0.75	0];
+            'STABILIZE'    , 2, [1.00	0       0];
+            'TRAINING'     , 3, [0.00	0       0];
+            'ACRO'         , 4, [0.25	0.25	0.25];
+            'FLY_BY_WIRE_A', 5, [0       0.75	0.75];
+            'FLY_BY_WIRE_B', 6, [0.75	0.25	0.25];
+            'CRUISE'       , 7, [0.95	0.95	0];
+            'AUTOTUNE'     , 8, [0.25	0.25	0.75];
+            'AUTO'         , 10, [0.75	0.75	0.75];
+            'RTL'          , 11, [0.00	1       0];
+            'LOITER'       , 12, [0.76	0.57	0.17];
+            'TAKEOFF'      , 13, [0.75	0       0.75];
+            'AVOID_ADSB'   , 14, [0       0.5     0];
+            'GUIDED'       , 15, [0.54	0.63	0.22];
+            'INITIALISING' , 16, [0.34	0.57	0.92];
+            'QSTABILIZE'   , 17, [1.00	0.1     0.6];
+            'QHOVER'       , 18, [0.88	0.75	0.73];
+            'QLOITER'      , 19, [0.10	0.49	0.47];
+            'QLAND'        , 20, [0.66	0.34	0.65];
+            'QRTL'         , 21, [0.99	0.41	0.23];
+            'QAUTOTUNE'    , 22, [0.58	0.49	0.25];
+            'QACRO'        , 23, [0.10    0.49    0.47];
+            'THERMAL'      , 24, [0.66    0.34    0.65];
+            'LOITER_ALT_QLAND', 25, [0.99    0.41    0.23];
+        };
+    
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduCopter/mode.h
+    CopterModes = {
+        % name, index, colour
+        'STABILIZE',     0, [0.00	0       1.00];  % blue, manual airframe angle with manual throttle
+        'ACRO',          1, [0.75	0.75	0];  % yellowish gold, manual body-frame angular rate with manual throttle
+        'ALT_HOLD',      2, [1.00	0       0];  % red, manual airframe angle with automatic throttle
+        'AUTO',          3, [0.00	0       0];  % black, fully automatic waypoint control using mission commands
+        'GUIDED',        4, [0.25	0.25	0.25];  % fully automatic fly to coordinate or fly at velocity/direction using GCS immediate commands
+        'LOITER',        5, [0       0.75	0.75];  % teal, automatic horizontal acceleration with automatic throttle
+        'RTL',           6, [0.75	0.25	0.25];  % brick red, automatic return to launching point
+        'CIRCLE',        7, [0.95	0.95	0];  % yellow, automatic circular flight with automatic throttle
+        'LAND',          9, [0.25	0.25	0.75];  % automatic landing with horizontal position control
+        'DRIFT',        11, [0.75	0.75	0.75];  % semi-autonomous position, yaw and throttle control
+        'SPORT',        13, [0.00	1       0];  % bright green, manual earth-frame angular rate control with manual throttle
+        'FLIP',         14, [0.76	0.57	0.17];  % automatically flip the vehicle on the roll axis
+        'AUTOTUNE',     15, [0.75	0       0.75];  % purple, automatically tune the vehicle's roll and pitch gains
+        'POSHOLD',      16, [0       0.5     0];  % dark green, automatic position hold with manual override, with automatic throttle
+        'BRAKE',        17, [0.54	0.63	0.22];  % full-brake using inertial/GPS system, no pilot input
+        'THROW',        18, [0.34	0.57	0.92];  % throw to launch mode using inertial/GPS system, no pilot input
+        'AVOID_ADSB',   19, [1.00	0.1     0.6];  % automatic avoidance of obstacles in the macro scale - e.g. full-sized aircraft
+        'GUIDED_NOGPS', 20, [0.88	0.75	0.73];  % guided mode but only accepts attitude and altitude
+        'SMART_RTL',    21, [0.10	0.49	0.47];  % SMART_RTL returns to home by retracing its steps
+        'FLOWHOLD ',    22, [0.66	0.34	0.65];  % FLOWHOLD holds position with optical flow without rangefinder
+        'FOLLOW   ',    23, [0.99	0.41	0.23];  % follow attempts to follow another vehicle or ground station
+        'ZIGZAG   ',    24, [0.58	0.49	0.25];  % ZIGZAG mode is able to fly in a zigzag manner with predefined point A and point B
+        'SYSTEMID ',    25, [0.10    0.49    0.47];  % System ID mode produces automated system identification signals in the controllers
+        'AUTOROTATE',   26, [0.66    0.34    0.65];  % Autonomous autorotation
+        'AUTO_RTL',     27, [0.99    0.41    0.23];  % Auto RTL, this is not a true mode, AUTO will report as this mode if entered to perform a DO_LAND_START Landing sequence
+        'TURTLE',       28, [0.23    0.77    1.00];  % Flip over after crash
+    };
+
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/Rover/mode.h
+    RoverModes = {
+        'MANUAL'      , 0, [0.00	0       1.00];
+        'ACRO'        , 1, [0.75	0.75	0];
+        'STEERING'    , 3, [1.00	0       0];
+        'HOLD'        , 4, [0.00	0       0];
+        'LOITER'      , 5, [0.25	0.25	0.25];
+        'FOLLOW'      , 6, [0       0.75	0.75];
+        'SIMPLE'      , 7, [0.75	0.25	0.25];
+        'DOCK'        , 8, [0.95	0.95	0];
+        'CIRCLE'      , 9, [0.25	0.25	0.75];
+        'AUTO'        , 10, [0.75	0.75	0.75];
+        'RTL'         , 11, [0.00	1       0];
+        'SMART_RTL'   , 12, [0.76	0.57	0.17];
+        'GUIDED'      , 15, [0.75	0       0.75];
+        'INITIALISING', 16, [0       0.5     0];
+    };
+    
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/ArduSub/mode.h
+    SubModes = {
+        'STABILIZE',     0, [0.00	0       1.00];  % manual angle with manual depth/throttle
+        'ACRO',          1, [0.75	0.75	0];  % manual body-frame angular rate with manual depth/throttle
+        'ALT_HOLD',      2, [1.00	0       0];  % manual angle with automatic depth/throttle
+        'AUTO',          3, [0.00	0       0];  % fully automatic waypoint control using mission commands
+        'GUIDED',        4, [0.25	0.25	0.25];  % fully automatic fly to coordinate or fly at velocity/direction using GCS immediate commands
+        'CIRCLE',        7, [0       0.75	0.75];  % automatic circular flight with automatic throttle
+        'SURFACE',       9, [0.75	0.25	0.25];  % automatically return to surface, []; pilot maintains horizontal control
+        'POSHOLD',      16, [0.95	0.95	0];  % automatic position hold with manual override, []; with automatic throttle
+        'MANUAL',       19, [0.25	0.25	0.75];  % Pass-through input with no stabilization
+        'MOTOR_DETECT', 20, [0.75	0.75	0.75];  % Automatically detect motors orientation
+        'SURFTRAK',     21, [0.00	1       0];   % Track distance above seafloor (hold range)
+    };
+
+    % ref: https://github.com/ArduPilot/ardupilot/blob/master/Blimp/mode.h
+    BlimpModes = {
+        'LAND',          0, [0.00	0       1.00];  % currently just stops moving
+        'MANUAL',        1, [0.75	0.75	0];  % manual control
+        'VELOCITY',      2, [1.00	0       0];  % velocity mode
+        'LOITER',        3, [0.00	0       0];  % loiter mode (position hold)
+        'RTL',           4, [0.25	0.25	0.25];  % rtl
+    };
+    
+    switch v_type
+        case 'ArduCopter'
+            modeStruct = CopterModes;
+        case 'ArduPlane'
+            modeStruct = PlaneModes;
+        case 'ArduRover'
+            modeStruct = RoverModes;
+        case 'ArduSub'
+            modeStruct = SubModes;
+        case 'ArduBlimp'
+            modeStruct = BlimpModes;
+        otherwise
+            error('Unsupported mode map for vehicle type %s', v_type);
+    end
+end
+
+
+function modeName = getModeName(modeStruct, modeNo)
+% Retrieve the mode name from the mode map.
+%
+% INPUTS:
+% modeStruct: The output of FlightModes().
+%
+% OUTPUTS:
+% modeName: A string with the mode name.
+    names = modeStruct(:,1);
+    indices = cell2mat(modeStruct(:,2));
+    index = find(indices==modeNo, 1);
+    modeName = names{index};
+end
+
+function modeColour = getModeColour(modeStruct, modeNo)
+% Retrieve the mode name from the mode map.
+%
+% INPUTS:
+% modeStruct: The output of FlightModes().
+%
+% OUTPUTS:
+% modeColour: An array with an RGB specification.
+    colours = modeStruct(:,3);
+    indices = cell2mat(modeStruct(:,2));
+    index = find(indices==modeNo, 1);
+    modeColour = colours{index};
+end
+
+
+function figh = GetFigureHandle(ob)
+    % Obtain the figure handle of an axis handle.
+    temp = ob.Parent;
+    if ~isa(temp, 'matlab.ui.Figure')
+        temp = GetFigureHandle(temp);
+    end
+    figh = temp;
+end 
+
+
+function CustomDataCursor(fh, varargin)
+% Assign a custom data tip message for a Figure.
+
+dcm_obj = datacursormode(fh);
+set(dcm_obj,'UpdateFcn',{@myupdatefcn})
+end
+
+
+function txt = myupdatefcn(~,event_obj)
+% Customizes text of data tips.
+    pos = get(event_obj,'Position');
+
+    % If the tag field of the selected object is not blank, it means that
+    % we are clicking on a mode change line.
+    if ~isempty(event_obj.Target.Tag)
+        txt = {['Time: ',num2str(pos(1))],...
+            ['Mode: ', event_obj.Target.Tag]
+            };
+    else % This is just a normal datapoint.
+        txt = {['X: ',num2str(pos(1))],...
+           ['Y: ',num2str(pos(2))]
+           };
+
+        % If there is a Z-coordinate in the position, display it as well
+        if length(pos) > 2
+            txt{end+1} = ['Z: ',num2str(pos(3))];
+        end
+    end
+
+    % If the userdata field is not blank, display it
+    temp = event_obj.Target.UserData;
+    if ~isempty(temp)
+        txt{end+1} = ['T: ' num2str(temp,'%.2f')];
+    end
+end
